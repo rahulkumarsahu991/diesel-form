@@ -253,7 +253,11 @@
         <span id="myReqChevron">▾</span>
       </button>
       <div class="list-body" id="myReqBody">
-        <div class="my-search-row">
+        <div class="ov-toolbar" id="myModeToolbar">
+          <button class="my-mode active" type="button" data-mode="name">🔍 Naam Se</button>
+          <button class="my-mode" type="button" data-mode="all">📋 Sab Requests</button>
+        </div>
+        <div class="my-search-row" id="myNameRow">
           <input type="text" id="myNameInput" placeholder="Apna naam likho (jaise 'Requested By' me likha)">
         </div>
         <div class="stats" id="myStats" style="display:none;"></div>
@@ -598,8 +602,10 @@
   var myStats = document.getElementById('myStats');
   var myToolbar = document.getElementById('myToolbar');
   var myReqList = document.getElementById('myReqList');
+  var myNameRow = document.getElementById('myNameRow');
   var myAllRows = [];
   var myStatus = '';
+  var myMode = 'name';
   var myNameTimer = null;
 
   var savedName = localStorage.getItem('dieselCallerName');
@@ -608,7 +614,23 @@
   myReqToggle.addEventListener('click', function(){
     var open = myReqBody.classList.toggle('show');
     myReqChevron.textContent = open ? '▴' : '▾';
-    if (open && myNameInput.value.trim()) loadMyRequests();
+    if (open && (myMode === 'all' || myNameInput.value.trim())) loadMyRequests();
+  });
+
+  document.querySelectorAll('.my-mode').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.my-mode').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      myMode = btn.getAttribute('data-mode');
+      if (myMode === 'all') {
+        myNameRow.style.display = 'none';
+        loadMyRequests();
+      } else {
+        myNameRow.style.display = 'flex';
+        if (myNameInput.value.trim()) loadMyRequests();
+        else { myStats.style.display = 'none'; myToolbar.style.display = 'none'; myReqList.innerHTML = ''; }
+      }
+    });
   });
 
   myNameInput.addEventListener('input', function(){
@@ -628,14 +650,20 @@
   });
 
   function loadMyRequests(){
+    if (!APPS_SCRIPT_URL) return;
+    var isAll = myMode === 'all';
     var name = myNameInput.value.trim();
-    if (!name || !APPS_SCRIPT_URL) return;
+    if (!isAll && !name) return;
+    var url = isAll
+      ? APPS_SCRIPT_URL + '?action=list&limit=150'
+      : APPS_SCRIPT_URL + '?action=list&by=' + encodeURIComponent(name);
     myReqList.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:13px;">Loading...</div>';
-    // Server par hi naam se filter hota hai — sabki requests download nahi hoti
-    fetch(APPS_SCRIPT_URL + '?action=list&by=' + encodeURIComponent(name))
+    // "Sab Requests" me server se latest 150 aati hain; "Naam Se" me server par hi naam se filter hota hai
+    fetch(url)
       .then(function(r){ return r.json(); })
       .then(function(res){
-        if (myNameInput.value.trim() !== name) return; // stale
+        if (myMode !== (isAll ? 'all' : 'name')) return; // mode badal gaya, purana response ignore
+        if (!isAll && myNameInput.value.trim() !== name) return; // stale
         if (!res.ok) { myReqList.innerHTML = '<div style="padding:10px;color:var(--red);font-size:13px;">Error: ' + esc(res.error) + '</div>'; return; }
         myAllRows = res.rows;
         renderMyStats();
@@ -677,7 +705,7 @@
     head.className = 'req-item-head';
     head.innerHTML =
       '<div>' +
-        '<div style="font-weight:800;color:var(--navy);font-size:13px;">' + esc(r.id) + '</div>' +
+        '<div style="font-weight:800;color:var(--navy);font-size:13px;">' + esc(r.id) + (myMode === 'all' ? ' <span style="font-weight:600;color:var(--orange-dark);">— ' + esc(r.requestedBy) + '</span>' : '') + '</div>' +
         '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + esc(r.vehicleNo) + ' • ' + esc(r.requestedLiters) + ' L • ' + fmtDate(r.createdAt) + '</div>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">' +
