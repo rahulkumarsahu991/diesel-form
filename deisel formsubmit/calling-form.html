@@ -146,12 +146,12 @@
   .req-item-head:active{background:rgba(242,137,26,.1);}
   .req-item .chevron{font-size:10px;color:var(--muted);transition:transform .15s;}
   .req-item.open .chevron{transform:rotate(180deg);}
-  .req-item-body{display:none;padding:0 13px 12px;font-size:12px;}
+  .req-item-body{display:none;padding:2px 13px 10px;}
   .req-item.open .req-item-body{display:block;}
-  .req-item-body .r{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border);}
+  .req-item-body .r{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:5px 0;border-bottom:1px dashed var(--border);}
   .req-item-body .r:last-child{border-bottom:none;}
-  .req-item-body .r span:first-child{color:var(--muted);}
-  .req-item-body .r span:last-child{font-weight:600;text-align:right;}
+  .req-item-body .r span:first-child{color:var(--muted);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
+  .req-item-body .r span:last-child{font-weight:700;text-align:right;font-size:12.5px;color:var(--ink);}
 
   /* ---------- Login gate ---------- */
   #loginOverlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;

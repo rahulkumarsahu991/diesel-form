@@ -54,9 +54,9 @@
   .msg{margin-top:14px;padding:12px 14px;border-radius:8px;font-size:14px;display:none;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
   .msg.err{background:rgba(254,242,242,.8);color:var(--red);border:1px solid #fecaca;display:block;}
   .details{margin-top:4px;}
-  .details .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--border);font-size:14px;}
-  .details .row span:first-child{color:var(--muted);}
-  .details .row span:last-child{font-weight:700;text-align:right;}
+  .details .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px dashed var(--border);}
+  .details .row span:first-child{color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
+  .details .row span:last-child{font-weight:700;text-align:right;font-size:14px;color:var(--ink);}
   .receipt{border:2px dashed var(--green);border-radius:10px;padding:18px;margin-top:16px;}
   .receipt h2{margin:0 0 4px;font-size:16px;text-align:center;color:var(--green-dark);}
   .receipt .rno{text-align:center;font-size:13px;color:var(--muted);margin-bottom:14px;}
@@ -101,12 +101,12 @@
   .req-card .rc-liters{font-weight:700;color:var(--green-dark);white-space:nowrap;}
   .req-card .rc-chevron{font-size:11px;color:var(--muted);transition:transform .15s;}
   .req-card.open .rc-chevron{transform:rotate(180deg);}
-  .req-card-body{display:none;padding:0 16px 14px;font-size:12px;}
+  .req-card-body{display:none;padding:2px 16px 12px;}
   .req-card.open .req-card-body{display:block;}
-  .req-card-body .r{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border);}
+  .req-card-body .r{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:5px 0;border-bottom:1px dashed var(--border);}
   .req-card-body .r:last-child{border-bottom:none;}
-  .req-card-body .r span:first-child{color:var(--muted);}
-  .req-card-body .r span:last-child{font-weight:600;text-align:right;}
+  .req-card-body .r span:first-child{color:var(--muted);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
+  .req-card-body .r span:last-child{font-weight:700;text-align:right;font-size:12.5px;color:var(--ink);}
   .req-card-body .use-id-btn{width:100%;margin-top:10px;padding:9px;background:var(--green);color:#fff;border:none;
     border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;}
   .status-chip{font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;text-transform:uppercase;margin-left:8px;}
