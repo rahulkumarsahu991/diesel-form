@@ -78,7 +78,7 @@
   .status-Dispensed{background:#dbeafe;color:#1d4ed8;}
   .ov-empty,.ov-loading{padding:30px;text-align:center;color:var(--muted);}
 
-  .vo-panel{max-width:900px;margin:20px auto 0;}
+  .vo-panel{margin:0 0 20px;}
   .vo-title{font-size:15px;font-weight:800;color:#fff;margin-bottom:10px;text-shadow:0 1px 3px rgba(0,0,0,.4);}
   .vo-body{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:16px;padding:14px;
     box-shadow:0 8px 32px rgba(16,19,46,.2);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);}
@@ -107,12 +107,17 @@
     .table-wrap table{min-width:0;font-size:13px;}
     .table-wrap thead{display:none;}
     .table-wrap tbody,.table-wrap tr,.table-wrap td{display:block;width:100%;}
-    .table-wrap tr{background:rgba(255,255,255,.85);border:1px solid var(--glass-border);border-radius:14px;
-      margin-bottom:10px;padding:10px 12px;box-shadow:0 4px 16px rgba(16,19,46,.18);
+    .table-wrap tbody tr{position:relative;cursor:pointer;background:rgba(255,255,255,.85);border:1px solid var(--glass-border);border-radius:14px;
+      margin-bottom:10px;padding:10px 34px 10px 12px;box-shadow:0 4px 16px rgba(16,19,46,.18);
       backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%);}
+    .table-wrap tbody tr::after{content:'▾';position:absolute;top:12px;right:12px;font-size:11px;color:var(--muted);transition:transform .2s;}
+    .table-wrap tbody tr.expanded::after{transform:rotate(180deg);}
     .table-wrap td{border-bottom:1px dashed var(--border);padding:6px 0;white-space:normal;
-      display:flex;justify-content:space-between;gap:12px;align-items:baseline;
+      display:none;justify-content:space-between;gap:12px;align-items:baseline;
       font-weight:600;color:var(--ink);font-size:12.5px;}
+    .table-wrap td.vsum{display:flex;}
+    .table-wrap tr.expanded td{display:flex;}
+    .table-wrap tr.expanded td.vsum{border-bottom:1px dashed var(--border);}
     .table-wrap td:last-child{border-bottom:none;}
     .table-wrap td::before{content:attr(data-label);color:var(--muted);font-size:10.5px;font-weight:600;
       text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
@@ -220,19 +225,6 @@
       <button class="ov-refresh" id="ovRefresh">↻ Refresh</button>
     </div>
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Request ID</th><th>Date</th><th>Vehicle</th><th>Odometer (KM)</th><th>Driver</th><th>Status</th>
-            <th>Req. Liters</th><th>Appr. Liters</th><th>Actual Liters</th>
-            <th>Requested By</th><th>Manager</th><th>Dispensed By</th>
-          </tr>
-        </thead>
-        <tbody id="ovBody"><tr><td colspan="12" class="ov-loading">Loading...</td></tr></tbody>
-      </table>
-    </div>
-
     <div class="vo-panel">
       <div class="vo-title">🚚 Vehicle-wise Overview — OTP count, last diesel dispensed</div>
       <div class="vo-body" id="voBody">
@@ -246,6 +238,19 @@
           </table>
         </div>
       </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Request ID</th><th>Date</th><th>Vehicle</th><th>Odometer (KM)</th><th>Driver</th><th>Status</th>
+            <th>Req. Liters</th><th>Appr. Liters</th><th>Actual Liters</th>
+            <th>Requested By</th><th>Manager</th><th>Dispensed By</th>
+          </tr>
+        </thead>
+        <tbody id="ovBody"><tr><td colspan="12" class="ov-loading">Loading...</td></tr></tbody>
+      </table>
     </div>
   </div>
 
@@ -344,12 +349,12 @@
     ovBody.innerHTML = rows.map(function(r){
       // data-label shows a heading next to each value in the mobile card view
       return '<tr>' +
-        '<td data-label="Request ID"><b>' + esc(r.id) + '</b></td>' +
-        '<td data-label="Date">' + fmtDate(r.createdAt) + '</td>' +
-        '<td data-label="Vehicle">' + esc(r.vehicleNo) + '</td>' +
+        '<td data-label="Request ID" class="vsum"><b>' + esc(r.id) + '</b></td>' +
+        '<td data-label="Date" class="vsum">' + fmtDate(r.createdAt) + '</td>' +
+        '<td data-label="Vehicle" class="vsum">' + esc(r.vehicleNo) + '</td>' +
         '<td data-label="Odometer (KM)">' + esc(r.odometerKm || '-') + '</td>' +
         '<td data-label="Driver">' + esc(r.driverName) + '</td>' +
-        '<td data-label="Status"><span class="status-chip status-' + r.status + '">' + esc(r.status) + '</span></td>' +
+        '<td data-label="Status" class="vsum"><span class="status-chip status-' + r.status + '">' + esc(r.status) + '</span></td>' +
         '<td data-label="Req. Liters">' + esc(r.requestedLiters) + '</td>' +
         '<td data-label="Appr. Liters">' + esc(r.approvedLiters || '-') + '</td>' +
         '<td data-label="Actual Liters">' + esc(r.actualLiters || '-') + '</td>' +
@@ -359,6 +364,15 @@
       '</tr>';
     }).join('');
   }
+
+  // Mobile card view: row starts collapsed (summary only), tap to expand full details
+  ovBody.addEventListener('click', function(e){
+    var tr = e.target.closest('tr');
+    if (!tr || tr.parentNode !== ovBody || !tr.querySelector('td.vsum')) return;
+    var wasOpen = tr.classList.contains('expanded');
+    ovBody.querySelectorAll('tr.expanded').forEach(function(el){ el.classList.remove('expanded'); });
+    if (!wasOpen) tr.classList.add('expanded');
+  });
 
   /* ---------- Vehicle-wise Overview (OTP count / last dispensed) ---------- */
   var voBody = document.getElementById('voBody');
