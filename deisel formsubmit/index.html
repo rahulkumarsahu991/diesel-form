@@ -87,13 +87,14 @@
     table{min-width:0;font-size:13px;}
     thead{display:none;}
     tbody,tr,td{display:block;width:100%;}
-    tr{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:14px;
+    tr{background:rgba(255,255,255,.85);border:1px solid var(--glass-border);border-radius:14px;
       margin-bottom:10px;padding:10px 12px;box-shadow:0 4px 16px rgba(16,19,46,.18);
-      backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);}
+      backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%);}
     td{border-bottom:1px dashed var(--border);padding:6px 0;white-space:normal;
-      display:flex;justify-content:space-between;gap:12px;align-items:baseline;}
+      display:flex;justify-content:space-between;gap:12px;align-items:baseline;
+      font-weight:600;color:var(--ink);font-size:12.5px;}
     td:last-child{border-bottom:none;}
-    td::before{content:attr(data-label);color:var(--muted);font-size:11px;font-weight:600;
+    td::before{content:attr(data-label);color:var(--muted);font-size:10.5px;font-weight:600;
       text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
     td.ov-empty,td.ov-loading{display:block;text-align:center;}
     td.ov-empty::before,td.ov-loading::before{content:none;}
