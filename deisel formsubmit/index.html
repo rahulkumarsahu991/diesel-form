@@ -79,15 +79,9 @@
   .ov-empty,.ov-loading{padding:30px;text-align:center;color:var(--muted);}
 
   .vo-panel{max-width:900px;margin:20px auto 0;}
-  .vo-toggle{width:100%;text-align:left;padding:14px 18px;border-radius:16px;border:1px solid var(--glass-border);
-    background:var(--glass-bg);color:var(--ink);font-size:14px;font-weight:700;cursor:pointer;
-    box-shadow:0 8px 32px rgba(16,19,46,.2);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
-    display:flex;justify-content:space-between;align-items:center;}
-  .vo-toggle .chevron{font-size:12px;color:var(--muted);transition:transform .2s;flex-shrink:0;margin-left:10px;}
-  .vo-toggle.open .chevron{transform:rotate(180deg);}
-  .vo-body{display:none;margin-top:10px;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:16px;padding:14px;
+  .vo-title{font-size:15px;font-weight:800;color:#fff;margin-bottom:10px;text-shadow:0 1px 3px rgba(0,0,0,.4);}
+  .vo-body{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:16px;padding:14px;
     box-shadow:0 8px 32px rgba(16,19,46,.2);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);}
-  .vo-body.show{display:block;}
   .vo-table-wrap{overflow-x:auto;margin-top:10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.85);}
   .vo-table-wrap table{width:100%;border-collapse:collapse;font-size:13px;min-width:520px;}
   .vo-table-wrap th{text-align:left;padding:9px 10px;background:rgba(248,249,251,.7);color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);white-space:nowrap;}
@@ -126,8 +120,7 @@
     .table-wrap td.ov-empty::before,.table-wrap td.ov-loading::before{content:none;}
     /* Touch targets 44px (Apple/Google minimum recommendation) */
     .ov-toolbar button{padding:11px 16px;font-size:14px;min-height:44px;}
-    .vo-toggle{padding:14px 16px;min-height:48px;}
-    .vo-toggle span:first-child{font-size:13px;}
+    .vo-title{font-size:13px;}
   }
 
   /* ---------- Login gate ---------- */
@@ -241,10 +234,7 @@
     </div>
 
     <div class="vo-panel">
-      <button class="vo-toggle" id="voToggle">
-        <span>🚚 Vehicle-wise Overview — OTP count, last diesel dispensed</span>
-        <span class="chevron" id="voChevron">▾</span>
-      </button>
+      <div class="vo-title">🚚 Vehicle-wise Overview — OTP count, last diesel dispensed</div>
       <div class="vo-body" id="voBody">
         <input type="text" id="voSearch" placeholder="Search by vehicle number...">
         <div class="vo-table-wrap">
@@ -371,18 +361,11 @@
   }
 
   /* ---------- Vehicle-wise Overview (OTP count / last dispensed) ---------- */
-  var voToggle = document.getElementById('voToggle');
-  var voChevron = document.getElementById('voChevron');
   var voBody = document.getElementById('voBody');
   var voTableBody = document.getElementById('voTableBody');
   var voSearch = document.getElementById('voSearch');
   var vehicleStats = null;
 
-  voToggle.addEventListener('click', function(){
-    var open = voBody.classList.toggle('show');
-    voToggle.classList.toggle('open', open);
-    voChevron.textContent = open ? '▴' : '▾';
-  });
   voSearch.addEventListener('input', function(){ renderVehicleOverview(); });
 
   function aggregateVehicles(rows){
