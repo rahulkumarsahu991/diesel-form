@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="logo.png">
+<title>Diesel Request — Calling Team</title>
+<style>
+  :root{
+    --navy:#1b1f4f; --navy-dark:#10132e; --gold:#e0a94c;
+    --orange:#f2891a; --orange-dark:#d9720a; --orange-light:#fef3e8;
+    --ink:#1a1a1a; --muted:#6b7280;
+    --bg:#f4f5f7; --card:#ffffff; --border:#e5e7eb; --green:#16a34a; --red:#dc2626;
+    --glass-bg:rgba(255,255,255,.62); --glass-border:rgba(255,255,255,.55);
+  }
+  html{-webkit-text-size-adjust:100%;}
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);min-height:100vh;
+    background:
+      radial-gradient(circle at 12% 8%, rgba(242,137,26,.35), transparent 42%),
+      radial-gradient(circle at 88% 14%, rgba(224,169,76,.3), transparent 40%),
+      radial-gradient(circle at 22% 92%, rgba(29,78,216,.22), transparent 45%),
+      radial-gradient(circle at 88% 88%, rgba(139,58,183,.18), transparent 45%),
+      linear-gradient(135deg,#0d1030 0%,#1b1f4f 45%,#241a4d 100%);
+    background-attachment:fixed;background-size:cover;}
+  .topbar{background:var(--navy);color:#fff;padding:clamp(18px,3.2vw,28px) 20px;position:relative;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);}
+  .topbar::after{content:'';position:absolute;left:0;right:0;bottom:0;height:3px;
+    background:linear-gradient(90deg,transparent,var(--gold) 12%,var(--orange) 50%,var(--gold) 88%,transparent);}
+  .topbar-inner{display:flex;align-items:center;justify-content:center;gap:18px;max-width:1100px;margin:0 auto;}
+  .logo{height:clamp(48px,7vw,66px);width:auto;flex-shrink:0;display:block;}
+  .title-divider{width:2px;align-self:stretch;min-height:40px;flex-shrink:0;
+    background:linear-gradient(180deg,transparent,var(--gold),transparent);}
+  .topbar-text{min-width:0;}
+  .topbar h1{margin:0;font-family:Georgia,'Times New Roman',serif;font-size:clamp(15px,5vw,34px);
+    font-weight:700;letter-spacing:.2px;text-align:left;text-shadow:0 1px 4px rgba(0,0,0,.35);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .topbar p{margin:6px 0 0;font-size:clamp(10px,2.6vw,13px);letter-spacing:1px;text-transform:uppercase;
+    color:var(--gold);opacity:.95;text-align:left;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  @media (max-width:480px){
+    .topbar-inner{gap:10px;}
+    .logo{height:36px;}
+    .title-divider{min-height:30px;}
+  }
+  .wrap{max-width:600px;margin:0 auto;padding:clamp(12px,3vw,24px);}
+  .card{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:16px;padding:clamp(16px,3vw,28px);margin-top:16px;
+    box-shadow:0 8px 32px rgba(16,19,46,.25);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);}
+  label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:14px 0 6px;}
+  label:first-of-type{margin-top:0;}
+  input,textarea{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:8px;font-size:16px;font-family:inherit;background:#fff;}
+  input:focus,textarea:focus{outline:none;border-color:var(--orange);}
+  input[readonly]{background:rgba(244,245,247,.85);color:var(--muted);}
+  textarea{resize:vertical;min-height:60px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media (max-width:420px){ .row2{grid-template-columns:1fr;} }
+  .location-row{display:flex;gap:8px;}
+  .location-row input{flex:1;}
+  .location-row button{width:auto;margin-top:0;padding:11px 14px;background:#fff;color:var(--navy);
+    border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;white-space:nowrap;}
+  .location-row button:active{background:var(--orange-light);}
+  .location-row button:disabled{opacity:.6;cursor:not-allowed;}
+  @media (max-width:380px){ .location-row{flex-direction:column;} .location-row button{width:100%;} }
+  button{width:100%;margin-top:20px;padding:14px;background:var(--orange);color:#fff;border:none;border-radius:9px;font-size:16px;font-weight:700;cursor:pointer;}
+  button:disabled{opacity:.6;cursor:not-allowed;}
+  button:active{background:var(--orange-dark);}
+  .msg{margin-top:14px;padding:12px 14px;border-radius:8px;font-size:14px;display:none;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+  .msg.ok{background:rgba(240,253,244,.8);color:var(--green);border:1px solid #bbf7d0;display:block;}
+  .msg.err{background:rgba(254,242,242,.8);color:var(--red);border:1px solid #fecaca;display:block;}
+  .req-id{font-size:22px;font-weight:800;letter-spacing:.5px;margin:6px 0;color:var(--navy);}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px;}
+  .req{color:var(--red);}
+
+  .autocomplete-wrap{position:relative;}
+  .suggestions{position:absolute;top:100%;left:0;right:0;background:rgba(255,255,255,.92);border:1px solid var(--border);
+    border-top:none;border-radius:0 0 8px 8px;max-height:220px;overflow-y:auto;z-index:20;
+    box-shadow:0 6px 14px rgba(0,0,0,.1);display:none;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+  .suggestions.show{display:block;}
+  .suggestions .item{padding:10px 12px;font-size:14px;cursor:pointer;}
+  .suggestions .item:hover,.suggestions .item.active{background:var(--orange-light);}
+  .suggestions .none{padding:10px 12px;font-size:13px;color:var(--muted);}
+
+  .driver-info{margin-top:8px;padding:9px 12px;border-radius:8px;font-size:13px;display:none;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+  .driver-info.ok{background:rgba(240,253,244,.8);color:var(--green);border:1px solid #bbf7d0;display:block;}
+  .driver-info.err{background:rgba(254,242,242,.8);color:var(--red);border:1px solid #fecaca;display:block;}
+  .driver-info.loading{background:rgba(244,245,247,.8);color:var(--muted);border:1px solid var(--border);display:block;}
+
+  .history-box{margin-top:8px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.55);
+    border:1px solid var(--glass-border);font-size:12px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:none;}
+  .history-box .h-title{font-weight:700;color:var(--navy);margin-bottom:6px;font-size:12px;}
+  .history-box .h-msg{color:var(--muted);}
+  .history-box table{width:100%;border-collapse:collapse;font-size:11px;}
+  .history-box th{text-align:left;padding:4px 6px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap;}
+  .history-box td{padding:4px 6px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  .history-box tr:last-child td{border-bottom:none;}
+
+  .list-panel{margin-top:20px;}
+  .list-toggle{width:100%;text-align:left;padding:14px 18px;border-radius:16px;border:1px solid var(--glass-border);
+    background:var(--glass-bg);color:var(--ink);font-size:14px;font-weight:700;cursor:pointer;
+    box-shadow:0 8px 32px rgba(16,19,46,.2);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
+    display:flex;justify-content:space-between;align-items:center;}
+  .list-body{display:none;margin-top:10px;}
+  .list-body.show{display:block;}
+  .my-search-row{display:flex;gap:8px;}
+  .my-search-row input{flex:1;}
+  .my-search-row button{width:auto;margin-top:0;padding:11px 16px;}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin:14px 0;}
+  .stat-tile{background:rgba(255,255,255,.6);border:1px solid var(--glass-border);border-top:3px solid var(--accent);
+    border-radius:10px;padding:8px 10px;}
+  .stat-tile .num{font-size:18px;font-weight:800;color:var(--ink);}
+  .stat-tile .label{font-size:9px;color:var(--muted);margin-top:1px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;}
+
+  .ov-toolbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+  .ov-toolbar button{width:auto;margin-top:0;padding:7px 12px;border-radius:8px;border:1px solid var(--border);
+    background:rgba(255,255,255,.7);font-size:12px;font-weight:600;cursor:pointer;color:var(--ink);}
+  .ov-toolbar button.active{background:var(--orange);color:#fff;border-color:var(--orange);}
+  /* Mobile par touch targets 44px (Apple/Google minimum recommendation) */
+  @media (max-width:640px){
+    .ov-toolbar button{padding:11px 16px;font-size:14px;min-height:44px;}
+    .req-item-head{padding:14px 13px;}
+  }
+
+  .status-chip{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;text-transform:uppercase;}
+  .status-Pending{background:#fef3c7;color:#d97706;}
+  .status-Approved{background:#dcfce7;color:var(--green);}
+  .status-Rejected{background:#fee2e2;color:var(--red);}
+  .status-Dispensed{background:#dbeafe;color:#1d4ed8;}
+
+  .req-item{background:rgba(255,255,255,.5);border:1px solid var(--glass-border);border-radius:12px;margin-top:8px;overflow:hidden;}
+  .req-item-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:11px 13px;cursor:pointer;}
+  .req-item-head:active{background:rgba(242,137,26,.1);}
+  .req-item .chevron{font-size:10px;color:var(--muted);transition:transform .15s;}
+  .req-item.open .chevron{transform:rotate(180deg);}
+  .req-item-body{display:none;padding:0 13px 12px;font-size:12px;}
+  .req-item.open .req-item-body{display:block;}
+  .req-item-body .r{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border);}
+  .req-item-body .r:last-child{border-bottom:none;}
+  .req-item-body .r span:first-child{color:var(--muted);}
+  .req-item-body .r span:last-child{font-weight:600;text-align:right;}
+
+  /* ---------- Login gate ---------- */
+  #loginOverlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;
+    background:
+      radial-gradient(circle at 12% 8%, rgba(242,137,26,.35), transparent 42%),
+      radial-gradient(circle at 88% 14%, rgba(224,169,76,.3), transparent 40%),
+      radial-gradient(circle at 22% 92%, rgba(29,78,216,.22), transparent 45%),
+      linear-gradient(135deg,#0d1030 0%,#1b1f4f 45%,#241a4d 100%);}
+  #loginOverlay.hide{display:none;}
+  .login-card{width:100%;max-width:360px;background:var(--glass-bg);border:1px solid var(--glass-border);
+    border-radius:18px;padding:28px 24px;text-align:center;box-shadow:0 8px 32px rgba(16,19,46,.35);
+    backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);}
+  .login-card img{height:64px;width:auto;display:block;margin:0 auto 14px;border-radius:12px;}
+  .login-card h2{margin:0 0 4px;font-family:Georgia,'Times New Roman',serif;font-size:20px;color:var(--navy);}
+  .login-card .lsub{margin:0 0 18px;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:600;}
+  .login-card input{width:100%;padding:11px 12px;margin-bottom:10px;border:1px solid var(--border);border-radius:9px;
+    font-size:16px;font-family:inherit;background:#fff;}
+  .login-card input:focus{outline:none;border-color:var(--orange);}
+  .login-card button{width:100%;margin-top:6px;padding:12px;background:var(--orange);color:#fff;border:none;border-radius:9px;
+    font-size:15px;font-weight:700;cursor:pointer;}
+  .login-err{margin-top:10px;font-size:13px;color:var(--red);font-weight:600;min-height:18px;}
+  .shake{animation:shake .4s;}
+  @keyframes shake{
+    0%,100%{transform:translateX(0);}
+    20%,60%{transform:translateX(-9px);}
+    40%,80%{transform:translateX(9px);}
+  }
+</style>
+</head>
+<body>
+  <div id="loginOverlay">
+    <div class="login-card" id="loginCard">
+      <img src="logo.png" alt="Logo">
+      <h2>⛽ Diesel Request Form</h2>
+      <p class="lsub">Stage 1 — Calling Team Login</p>
+      <form id="loginForm">
+        <input type="text" id="loginUser" placeholder="User ID" autocomplete="username" autocapitalize="off">
+        <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password">
+        <button type="submit">Login</button>
+      </form>
+      <div class="login-err" id="loginErr"></div>
+    </div>
+  </div>
+
+  <div class="topbar">
+    <div class="topbar-inner">
+      <img src="logo.png" alt="Logo" class="logo">
+      <div class="title-divider"></div>
+      <div class="topbar-text">
+        <h1>⛽ Diesel Request Form</h1>
+        <p>Stage 1 — Calling Team</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <form id="reqForm">
+        <label>Vehicle No <span class="req">*</span></label>
+        <div class="autocomplete-wrap">
+          <input type="text" id="vehicleNo" required autocomplete="off" placeholder="Type karke search karo...">
+          <div class="suggestions" id="vehicleSuggestions"></div>
+        </div>
+        <div class="history-box" id="vehicleHistory"></div>
+
+        <label>Driver ID <span class="req">*</span></label>
+        <input type="text" id="driverId" required autocomplete="off" placeholder="Driver ID daalo">
+        <div class="driver-info" id="driverInfo"></div>
+
+        <div class="row2">
+          <div>
+            <label>Driver Name (auto)</label>
+            <input type="text" id="driverNameAuto" readonly placeholder="Driver ID se auto-fill hoga">
+          </div>
+          <div>
+            <label>Contact Number (auto)</label>
+            <input type="tel" id="contactNumber" readonly placeholder="Driver ID se auto-fill hoga">
+          </div>
+        </div>
+
+        <label>Odometer (KM) <span class="req">*</span></label>
+        <input type="number" id="odometerKm" required min="0" step="1" placeholder="e.g. 145230">
+
+        <label>Requested Liters <span class="req">*</span></label>
+        <input type="number" id="requestedLiters" required min="1" step="0.1" placeholder="e.g. 100">
+
+        <label>Route / Trip</label>
+        <div class="autocomplete-wrap">
+          <input type="text" id="routeTrip" autocomplete="off" placeholder="e.g. Raipur to Bilaspur">
+          <div class="suggestions" id="routeSuggestions"></div>
+        </div>
+
+        <label>Current Location</label>
+        <div class="location-row">
+          <input type="text" id="currentLocation" placeholder="e.g. NH-6 ke paas, Bilaspur">
+          <button type="button" id="useLocationBtn">📍 Use My Location</button>
+        </div>
+        <div class="driver-info" id="locationInfo"></div>
+
+        <label>Requested By (aapka naam) <span class="req">*</span></label>
+        <input type="text" id="requestedBy" required placeholder="Aapka naam">
+
+        <label>Remarks</label>
+        <textarea id="callingRemarks" placeholder="Koi extra jaankari (optional)"></textarea>
+
+        <button type="submit" id="submitBtn">Submit Request</button>
+      </form>
+
+      <div class="msg" id="msgBox"></div>
+    </div>
+
+    <div class="list-panel">
+      <button class="list-toggle" id="myReqToggle" type="button">
+        <span>📋 Meri Requests — status dekho</span>
+        <span id="myReqChevron">▾</span>
+      </button>
+      <div class="list-body" id="myReqBody">
+        <div class="my-search-row">
+          <input type="text" id="myNameInput" placeholder="Apna naam likho (jaise 'Requested By' me likha)">
+        </div>
+        <div class="stats" id="myStats" style="display:none;"></div>
+        <div class="ov-toolbar" id="myToolbar" style="display:none;">
+          <button class="my-filter active" data-status="">Sab</button>
+          <button class="my-filter" data-status="Pending">Pending</button>
+          <button class="my-filter" data-status="Approved">Approved</button>
+          <button class="my-filter" data-status="Dispensed">Dispensed</button>
+          <button class="my-filter" data-status="Rejected">Rejected</button>
+        </div>
+        <div id="myReqList"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  /* ---------- Login gate ---------- */
+  (function(){
+    var USER = 'Caller1', PASS = 'Calling@11', KEY = 'dieselAuthCaller';
+    var overlay = document.getElementById('loginOverlay');
+    var card = document.getElementById('loginCard');
+    var errEl = document.getElementById('loginErr');
+
+    if (sessionStorage.getItem(KEY) === '1') overlay.classList.add('hide');
+
+    document.getElementById('loginForm').addEventListener('submit', function(e){
+      e.preventDefault();
+      var u = document.getElementById('loginUser').value.trim();
+      var p = document.getElementById('loginPass').value;
+      if (u === USER && p === PASS) {
+        sessionStorage.setItem(KEY, '1');
+        overlay.classList.add('hide');
+        errEl.textContent = '';
+      } else {
+        errEl.textContent = 'Galat User ID ya Password';
+        card.classList.remove('shake');
+        void card.offsetWidth; // reflow so the shake animation can replay
+        card.classList.add('shake');
+        if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+        document.getElementById('loginPass').value = '';
+      }
+    });
+  })();
+
+  // Google Apps Script "Web App" deploy karne ke baad jo /exec URL milega wo yahan paste karo
+  var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbybGePj0rLOxG_xdK-XjXtipxm_izdiozm9rgWbKTsY7L7XbFhSrzgs86JNCWvxO-0ipw/exec";
+
+  var form = document.getElementById('reqForm');
+  var msgBox = document.getElementById('msgBox');
+  var submitBtn = document.getElementById('submitBtn');
+
+  /* ---------- Dropdown lists: ek hi call + localStorage cache ----------
+     Apps Script har request par ~2.5s leta hai (payload chhota ho tab bhi),
+     isliye teeno lists ek hi call me aati hain aur browser me 6 ghante cache
+     hoti hain — repeat visits par suggestions turant (0ms) mil jaati hain. */
+  var LISTS_CACHE_KEY = 'dieselLists';
+  var LISTS_TTL_MS = 6 * 60 * 60 * 1000; // 6 ghante (server cache jitna hi)
+  var listsData = { vehicles: [], pumps: [], routes: [] };
+  var listsLoaded = false;
+  var listsWaiters = [];
+
+  (function loadLists(){
+    try {
+      var raw = localStorage.getItem(LISTS_CACHE_KEY);
+      if (raw) {
+        var cached = JSON.parse(raw);
+        if (cached && (Date.now() - cached.t) < LISTS_TTL_MS && cached.d) {
+          listsData = cached.d;
+          listsLoaded = true;
+        }
+      }
+    } catch (e) { /* corrupt cache — ignore, network se le lenge */ }
+
+    if (!APPS_SCRIPT_URL) { listsLoaded = true; return; }
+
+    // Cache fresh ho to bhi background me refresh kar lete hain (stale-while-revalidate)
+    fetch(APPS_SCRIPT_URL + '?action=lists')
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (!res.ok) return;
+        listsData = { vehicles: res.vehicles || [], pumps: res.pumps || [], routes: res.routes || [] };
+        try { localStorage.setItem(LISTS_CACHE_KEY, JSON.stringify({ t: Date.now(), d: listsData })); } catch (e) {}
+      })
+      .catch(function(){ /* offline — cache/typed value se kaam chalega */ })
+      .finally(function(){
+        listsLoaded = true;
+        listsWaiters.forEach(function(fn){ fn(); });
+        listsWaiters = [];
+      });
+  })();
+
+  /* ---------- Reusable searchable-dropdown autocomplete ---------- */
+  function setupAutocomplete(inputEl, suggestionsEl, listKey, onSelect){
+    if (!listsLoaded) {
+      listsWaiters.push(function(){
+        // Data aa gaya — agar user pehle se type kar chuka hai to suggestions turant refresh karo
+        if (document.activeElement === inputEl && inputEl.value.trim()) render(inputEl.value.trim());
+      });
+    }
+
+    function render(query){
+      var list = listsData[listKey] || [];
+      var loaded = listsLoaded;
+      if (!query) { suggestionsEl.classList.remove('show'); return; }
+      if (!loaded) {
+        suggestionsEl.innerHTML = '<div class="none">Dhoond rahe hain...</div>';
+        suggestionsEl.classList.add('show');
+        return;
+      }
+      if (!list.length) { suggestionsEl.classList.remove('show'); return; }
+      var q = query.toUpperCase();
+      var matches = list.filter(function(v){ return v.toUpperCase().indexOf(q) !== -1; }).slice(0, 8);
+      if (!matches.length) {
+        suggestionsEl.innerHTML = '<div class="none">Koi match nahi mila — apna typed value hi use hoga</div>';
+        suggestionsEl.classList.add('show');
+        return;
+      }
+      suggestionsEl.innerHTML = matches.map(function(v){
+        return '<div class="item">' + esc(v) + '</div>';
+      }).join('');
+      suggestionsEl.classList.add('show');
+      suggestionsEl.querySelectorAll('.item').forEach(function(el, i){
+        el.addEventListener('mousedown', function(e){
+          e.preventDefault();
+          inputEl.value = matches[i];
+          suggestionsEl.classList.remove('show');
+          if (onSelect) onSelect(matches[i]);
+        });
+      });
+    }
+
+    inputEl.addEventListener('input', function(){ render(inputEl.value.trim()); });
+    inputEl.addEventListener('focus', function(){ if (inputEl.value.trim()) render(inputEl.value.trim()); });
+    inputEl.addEventListener('blur', function(){ setTimeout(function(){ suggestionsEl.classList.remove('show'); }, 150); });
+  }
+
+  var vehicleInput = document.getElementById('vehicleNo');
+  setupAutocomplete(vehicleInput, document.getElementById('vehicleSuggestions'), 'vehicles', function(v){ loadVehicleHistory(v); });
+  setupAutocomplete(document.getElementById('routeTrip'), document.getElementById('routeSuggestions'), 'routes');
+
+  /* ---------- Vehicle No -> last 5 refueling history ---------- */
+  var vehicleHistoryBox = document.getElementById('vehicleHistory');
+  var vehicleHistoryTimer = null;
+
+  vehicleInput.addEventListener('input', function(){
+    clearTimeout(vehicleHistoryTimer);
+    var v = vehicleInput.value.trim();
+    if (!v) { vehicleHistoryBox.style.display = 'none'; return; }
+    vehicleHistoryTimer = setTimeout(function(){ loadVehicleHistory(v); }, 500);
+  });
+
+  function loadVehicleHistory(vehicle){
+    if (!vehicle || !APPS_SCRIPT_URL) { vehicleHistoryBox.style.display = 'none'; return; }
+    vehicleHistoryBox.style.display = 'block';
+    vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last Refueling</div><div class="h-msg">Loading...</div>';
+    // Server par hi filter/trim hota hai — poori request list download nahi hoti
+    fetch(APPS_SCRIPT_URL + '?action=history&limit=5&vehicle=' + encodeURIComponent(vehicle))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (vehicleInput.value.trim() !== vehicle) return; // stale response, ignore
+        if (!res.ok) { vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 Last Refueling</div><div class="h-msg">Error: ' + esc(res.error) + '</div>'; return; }
+        var entries = res.rows;
+        if (!entries.length) {
+          vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last Refueling</div><div class="h-msg">Is vehicle ki koi purani refueling nahi mili.</div>';
+          return;
+        }
+        vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last ' + entries.length + ' Refueling</div>' +
+          '<table><thead><tr><th>Date</th><th>Liters</th><th>Odometer</th><th>Driver</th></tr></thead><tbody>' +
+          entries.map(function(r){
+            return '<tr><td>' + fmtDate(r.dispensedAt) + '</td><td>' + esc(r.actualLiters) + '</td><td>' + esc(r.odometerKm || '-') + '</td><td>' + esc(r.driverName || '-') + '</td></tr>';
+          }).join('') + '</tbody></table>';
+      })
+      .catch(function(err){
+        if (vehicleInput.value.trim() !== vehicle) return;
+        vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 Last Refueling</div><div class="h-msg">Network error: ' + esc(err.message) + '</div>';
+      });
+  }
+
+  /* ---------- Current Location: GPS auto-fill ---------- */
+  var currentLocationInput = document.getElementById('currentLocation');
+  var useLocationBtn = document.getElementById('useLocationBtn');
+  var locationInfo = document.getElementById('locationInfo');
+
+  useLocationBtn.addEventListener('click', function(){
+    if (!navigator.geolocation) {
+      locationInfo.className = 'driver-info err';
+      locationInfo.textContent = 'Ye device/browser GPS support nahi karta — manually likh do.';
+      return;
+    }
+    useLocationBtn.disabled = true;
+    useLocationBtn.textContent = 'Locating...';
+    locationInfo.className = 'driver-info loading';
+    locationInfo.textContent = 'Location dhoond rahe hain...';
+
+    navigator.geolocation.getCurrentPosition(function(pos){
+      var lat = pos.coords.latitude.toFixed(5);
+      var lon = pos.coords.longitude.toFixed(5);
+      currentLocationInput.value = lat + ', ' + lon;
+      locationInfo.className = 'driver-info ok';
+      locationInfo.textContent = '✅ Location mil gayi (map link ke liye copy karo: https://maps.google.com/?q=' + lat + ',' + lon + ')';
+      useLocationBtn.disabled = false;
+      useLocationBtn.textContent = '📍 Use My Location';
+    }, function(err){
+      locationInfo.className = 'driver-info err';
+      locationInfo.textContent = '❌ Location nahi mili (' + err.message + ') — manually type kar do.';
+      useLocationBtn.disabled = false;
+      useLocationBtn.textContent = '📍 Use My Location';
+    }, { enableHighAccuracy: true, timeout: 10000 });
+  });
+
+  /* ---------- Driver ID -> auto-fetch Name + Mobile ---------- */
+  var driverIdInput = document.getElementById('driverId');
+  var driverInfo = document.getElementById('driverInfo');
+  var driverNameAuto = document.getElementById('driverNameAuto');
+  var contactNumber = document.getElementById('contactNumber');
+  var fetchedDriver = null;
+  var driverTimer = null;
+
+  driverIdInput.addEventListener('input', function(){
+    fetchedDriver = null;
+    driverNameAuto.value = '';
+    contactNumber.value = '';
+    var id = driverIdInput.value.trim();
+    clearTimeout(driverTimer);
+    if (!id) { driverInfo.className = 'driver-info'; return; }
+    if (!APPS_SCRIPT_URL) {
+      driverInfo.className = 'driver-info err';
+      driverInfo.textContent = 'Setup baaki hai: APPS_SCRIPT_URL paste karo.';
+      return;
+    }
+    driverInfo.className = 'driver-info loading';
+    driverInfo.textContent = 'Dhoond rahe hain...';
+    driverTimer = setTimeout(function(){ fetchDriver(id); }, 400);
+  });
+
+  function fetchDriver(id){
+    fetch(APPS_SCRIPT_URL + '?action=driver&id=' + encodeURIComponent(id))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (driverIdInput.value.trim() !== id) return; // stale response, ignore
+        if (res.ok) {
+          fetchedDriver = { name: res.name, mobile: res.mobile };
+          driverNameAuto.value = res.name;
+          contactNumber.value = res.mobile;
+          driverInfo.className = 'driver-info';
+        } else {
+          fetchedDriver = null;
+          driverInfo.className = 'driver-info err';
+          driverInfo.textContent = '❌ ' + res.error;
+        }
+      })
+      .catch(function(err){
+        fetchedDriver = null;
+        driverInfo.className = 'driver-info err';
+        driverInfo.textContent = '❌ Network error: ' + err.message;
+      });
+  }
+
+  /* ---------- Submit ---------- */
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+
+    if (!APPS_SCRIPT_URL) {
+      showMsg('err', 'Setup baaki hai: Code.gs deploy karke APPS_SCRIPT_URL yahan HTML me paste karo.');
+      return;
+    }
+    if (!fetchedDriver) {
+      showMsg('err', '❌ Pehle valid Driver ID daalo — Name/Mobile fetch hone do (upar hara message dikhega).');
+      driverIdInput.focus();
+      return;
+    }
+
+    var payload = {
+      action: 'create',
+      vehicleNo: vehicleInput.value.trim(),
+      driverId: driverIdInput.value.trim(),
+      driverName: fetchedDriver.name,
+      odometerKm: document.getElementById('odometerKm').value,
+      requestedLiters: document.getElementById('requestedLiters').value,
+      contactNumber: contactNumber.value,
+      routeTrip: document.getElementById('routeTrip').value.trim(),
+      currentLocation: currentLocationInput.value.trim(),
+      requestedBy: document.getElementById('requestedBy').value.trim(),
+      callingRemarks: document.getElementById('callingRemarks').value.trim()
+    };
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+    msgBox.className = 'msg';
+
+    fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if (res.ok) {
+        localStorage.setItem('dieselCallerName', payload.requestedBy);
+        myNameInput.value = payload.requestedBy;
+        showMsg('ok', '✅ Request submit ho gayi! Manager ko ye Request ID batao:<br><span class="req-id">' + res.requestId + '</span><div class="hint">Manager approve karega, uske baad diesel team ko seedha dikhegi.</div>');
+        form.reset();
+        fetchedDriver = null;
+        driverInfo.className = 'driver-info';
+        driverNameAuto.value = '';
+        contactNumber.value = '';
+        locationInfo.className = 'driver-info';
+        vehicleHistoryBox.style.display = 'none';
+      } else {
+        showMsg('err', '❌ Error: ' + res.error);
+      }
+    })
+    .catch(function(err){
+      showMsg('err', '❌ Network error: ' + err.message);
+    })
+    .finally(function(){
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Request';
+    });
+  });
+
+  function showMsg(type, html){
+    msgBox.className = 'msg ' + type;
+    msgBox.innerHTML = html;
+    msgBox.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+  function esc(s){
+    return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function fmtDate(d){
+    if (!d) return '';
+    try { return new Date(d).toLocaleString('en-IN'); } catch(e){ return d; }
+  }
+
+  /* ---------- Meri Requests: apni submitted requests ka status dekho ---------- */
+  var myReqToggle = document.getElementById('myReqToggle');
+  var myReqChevron = document.getElementById('myReqChevron');
+  var myReqBody = document.getElementById('myReqBody');
+  var myNameInput = document.getElementById('myNameInput');
+  var myStats = document.getElementById('myStats');
+  var myToolbar = document.getElementById('myToolbar');
+  var myReqList = document.getElementById('myReqList');
+  var myAllRows = [];
+  var myStatus = '';
+  var myNameTimer = null;
+
+  var savedName = localStorage.getItem('dieselCallerName');
+  if (savedName) myNameInput.value = savedName;
+
+  myReqToggle.addEventListener('click', function(){
+    var open = myReqBody.classList.toggle('show');
+    myReqChevron.textContent = open ? '▴' : '▾';
+    if (open && myNameInput.value.trim()) loadMyRequests();
+  });
+
+  myNameInput.addEventListener('input', function(){
+    clearTimeout(myNameTimer);
+    var v = myNameInput.value.trim();
+    if (!v) { myStats.style.display = 'none'; myToolbar.style.display = 'none'; myReqList.innerHTML = ''; return; }
+    myNameTimer = setTimeout(function(){ loadMyRequests(); }, 500);
+  });
+
+  document.querySelectorAll('.my-filter').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.my-filter').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      myStatus = btn.getAttribute('data-status');
+      renderMyList();
+    });
+  });
+
+  function loadMyRequests(){
+    var name = myNameInput.value.trim();
+    if (!name || !APPS_SCRIPT_URL) return;
+    myReqList.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:13px;">Loading...</div>';
+    // Server par hi naam se filter hota hai — sabki requests download nahi hoti
+    fetch(APPS_SCRIPT_URL + '?action=list&by=' + encodeURIComponent(name))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (myNameInput.value.trim() !== name) return; // stale
+        if (!res.ok) { myReqList.innerHTML = '<div style="padding:10px;color:var(--red);font-size:13px;">Error: ' + esc(res.error) + '</div>'; return; }
+        myAllRows = res.rows;
+        renderMyStats();
+        myStats.style.display = 'grid';
+        myToolbar.style.display = 'flex';
+        renderMyList();
+      })
+      .catch(function(err){
+        myReqList.innerHTML = '<div style="padding:10px;color:var(--red);font-size:13px;">Network error: ' + esc(err.message) + '</div>';
+      });
+  }
+
+  function renderMyStats(){
+    var counts = { Pending: 0, Approved: 0, Rejected: 0, Dispensed: 0 };
+    myAllRows.forEach(function(r){ counts[r.status] = (counts[r.status] || 0) + 1; });
+    var tiles = [
+      { label: 'Total', num: myAllRows.length, accent: 'var(--navy)' },
+      { label: 'Pending', num: counts.Pending, accent: '#d97706' },
+      { label: 'Approved', num: counts.Approved, accent: 'var(--green)' },
+      { label: 'Dispensed', num: counts.Dispensed, accent: '#1d4ed8' },
+      { label: 'Rejected', num: counts.Rejected, accent: 'var(--red)' }
+    ];
+    myStats.innerHTML = tiles.map(function(t){
+      return '<div class="stat-tile" style="--accent:' + t.accent + '"><div class="num">' + t.num + '</div><div class="label">' + t.label + '</div></div>';
+    }).join('');
+  }
+
+  function renderMyList(){
+    var rows = myStatus ? myAllRows.filter(function(r){ return r.status === myStatus; }) : myAllRows;
+    if (!rows.length) { myReqList.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:13px;">Koi request nahi mili.</div>'; return; }
+    myReqList.innerHTML = '';
+    rows.forEach(function(r){ myReqList.appendChild(renderMyCard(r)); });
+  }
+
+  function renderMyCard(r){
+    var item = document.createElement('div');
+    item.className = 'req-item';
+    var head = document.createElement('div');
+    head.className = 'req-item-head';
+    head.innerHTML =
+      '<div>' +
+        '<div style="font-weight:800;color:var(--navy);font-size:13px;">' + esc(r.id) + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + esc(r.vehicleNo) + ' • ' + esc(r.requestedLiters) + ' L • ' + fmtDate(r.createdAt) + '</div>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">' +
+        '<span class="status-chip status-' + r.status + '">' + esc(r.status) + '</span>' +
+        '<span class="chevron">▾</span>' +
+      '</div>';
+    head.addEventListener('click', function(){ item.classList.toggle('open'); });
+    item.appendChild(head);
+
+    var body = document.createElement('div');
+    body.className = 'req-item-body';
+    body.innerHTML =
+      row('Driver', r.driverName) +
+      row('Route / Trip', r.routeTrip || '-') +
+      row('Odometer (KM)', r.odometerKm || '-') +
+      row('Requested Liters', r.requestedLiters) +
+      row('Approved Liters', r.approvedLiters || '-') +
+      row('Manager', r.managerName || '-') +
+      row('Pump / Location', r.pumpLocation || '-') +
+      row('Actual Liters', r.actualLiters || '-') +
+      row('Rate per Liter', r.ratePerLiter ? '₹ ' + r.ratePerLiter : '-') +
+      row('Amount', r.amount ? '₹ ' + r.amount : '-') +
+      row('Dispensed By', r.dispensedBy || '-') +
+      row('Receipt No', r.receiptNo || '-');
+    item.appendChild(body);
+
+    return item;
+  }
+
+  function row(label, val){
+    return '<div class="r"><span>' + label + '</span><span>' + esc(val) + '</span></div>';
+  }
+</script>
+</body>
+</html>

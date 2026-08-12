@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="logo.png">
+<title>Diesel Approval System</title>
+<style>
+  :root{
+    --navy:#1b1f4f; --navy-dark:#10132e; --gold:#e0a94c;
+    --orange:#f2891a; --orange-dark:#d9720a;
+    --green:#16a34a; --blue:#1d4ed8;
+    --ink:#1a1a1a; --muted:#6b7280; --bg:#f4f5f7; --card:#ffffff; --border:#e5e7eb;
+    --glass-bg:rgba(255,255,255,.62); --glass-border:rgba(255,255,255,.55);
+  }
+  html{-webkit-text-size-adjust:100%;}
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);min-height:100vh;
+    background:
+      radial-gradient(circle at 12% 8%, rgba(242,137,26,.32), transparent 42%),
+      radial-gradient(circle at 88% 14%, rgba(224,169,76,.28), transparent 40%),
+      radial-gradient(circle at 22% 92%, rgba(29,78,216,.22), transparent 45%),
+      radial-gradient(circle at 88% 88%, rgba(139,58,183,.18), transparent 45%),
+      linear-gradient(135deg,#0d1030 0%,#1b1f4f 45%,#241a4d 100%);
+    background-attachment:fixed;background-size:cover;}
+  .topbar{background:var(--navy);color:#fff;padding:clamp(20px,3.5vw,32px) 20px;position:relative;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);}
+  .topbar::after{content:'';position:absolute;left:0;right:0;bottom:0;height:3px;
+    background:linear-gradient(90deg,transparent,var(--gold) 12%,var(--orange) 50%,var(--gold) 88%,transparent);}
+  .topbar-inner{display:flex;align-items:center;justify-content:center;gap:20px;max-width:1100px;margin:0 auto;}
+  .logo{height:clamp(52px,7.5vw,72px);width:auto;flex-shrink:0;display:block;}
+  .title-divider{width:2px;align-self:stretch;min-height:44px;flex-shrink:0;
+    background:linear-gradient(180deg,transparent,var(--gold),transparent);}
+  .topbar-text{min-width:0;}
+  .topbar h1{margin:0;font-family:Georgia,'Times New Roman',serif;font-size:clamp(13px,4.4vw,38px);
+    font-weight:700;letter-spacing:.2px;text-align:left;text-shadow:0 1px 4px rgba(0,0,0,.35);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .topbar p{margin:6px 0 0;font-size:clamp(9px,2.3vw,14px);letter-spacing:.8px;text-transform:uppercase;
+    color:var(--gold);opacity:.95;text-align:left;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  @media (max-width:480px){
+    .topbar-inner{gap:8px;}
+    .logo{height:34px;}
+    .title-divider{min-height:26px;}
+  }
+  .wrap{max-width:1100px;margin:0 auto;padding:clamp(16px,3vw,28px);}
+  .links{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;}
+  .link-card{display:flex;align-items:center;gap:14px;background:var(--glass-bg);border:1px solid var(--glass-border);border-left:5px solid var(--accent);border-radius:16px;padding:18px;text-decoration:none;color:var(--ink);
+    box-shadow:0 8px 32px rgba(16,19,46,.2);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
+    transition:box-shadow .15s,transform .15s;}
+  .link-card:hover{box-shadow:0 10px 36px rgba(16,19,46,.28);transform:translateY(-1px);}
+  .link-card .emoji{font-size:28px;flex-shrink:0;}
+  .link-card .title{font-weight:700;font-size:15px;}
+  .link-card .sub{font-size:12px;color:var(--muted);margin-top:2px;}
+  .note{background:rgba(255,251,235,.82);border:1px solid #fde68a;border-radius:10px;padding:14px 16px;font-size:13px;color:#92400e;margin-top:20px;line-height:1.5;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+  .note b{display:block;margin-bottom:4px;}
+
+  .section-title{font-size:18px;font-weight:800;color:#fff;margin:32px 0 14px;text-shadow:0 1px 3px rgba(0,0,0,.4);}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:18px;}
+  .stat-tile{background:var(--glass-bg);border:1px solid var(--glass-border);border-top:4px solid var(--accent);border-radius:16px;padding:14px 16px;
+    box-shadow:0 8px 32px rgba(16,19,46,.2);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);}
+  .stat-tile .num{font-size:26px;font-weight:800;color:var(--ink);}
+  .stat-tile .label{font-size:11px;color:var(--muted);margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;}
+  .ov-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;}
+  .ov-toolbar button{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.7);font-size:13px;font-weight:600;cursor:pointer;color:var(--ink);}
+  .ov-toolbar button.active{background:var(--orange);color:#fff;border-color:var(--orange);}
+  .ov-refresh{margin-left:auto;background:none !important;border:none !important;color:var(--gold) !important;}
+  .table-wrap{overflow-x:auto;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:16px;
+    box-shadow:0 8px 32px rgba(16,19,46,.2);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:840px;}
+  th{text-align:left;padding:10px 12px;background:rgba(248,249,251,.6);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  td{padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  tr:last-child td{border-bottom:none;}
+  .status-chip{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;text-transform:uppercase;}
+  .status-Pending{background:#fef3c7;color:#d97706;}
+  .status-Approved{background:#dcfce7;color:#16a34a;}
+  .status-Rejected{background:#fee2e2;color:#dc2626;}
+  .status-Dispensed{background:#dbeafe;color:#1d4ed8;}
+  .ov-empty,.ov-loading{padding:30px;text-align:center;color:var(--muted);}
+
+  /* ---------- Mobile: table ko side-scroll ke bajaye stacked cards banao ----------
+     Chhoti screen par 12-column table padhna mushkil hai, isliye har row ek
+     card ban jaati hai jisme har cell ke aage uska heading (data-label) dikhta hai. */
+  @media (max-width:640px){
+    .table-wrap{background:transparent;border:none;box-shadow:none;overflow-x:visible;
+      backdrop-filter:none;-webkit-backdrop-filter:none;}
+    table{min-width:0;font-size:13px;}
+    thead{display:none;}
+    tbody,tr,td{display:block;width:100%;}
+    tr{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:14px;
+      margin-bottom:10px;padding:10px 12px;box-shadow:0 4px 16px rgba(16,19,46,.18);
+      backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);}
+    td{border-bottom:1px dashed var(--border);padding:6px 0;white-space:normal;
+      display:flex;justify-content:space-between;gap:12px;align-items:baseline;}
+    td:last-child{border-bottom:none;}
+    td::before{content:attr(data-label);color:var(--muted);font-size:11px;font-weight:600;
+      text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
+    td.ov-empty,td.ov-loading{display:block;text-align:center;}
+    td.ov-empty::before,td.ov-loading::before{content:none;}
+    /* Touch targets 44px (Apple/Google dono ki minimum recommendation) */
+    .ov-toolbar button{padding:11px 16px;font-size:14px;min-height:44px;}
+  }
+
+  /* ---------- Login gate ---------- */
+  #loginOverlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;
+    background:
+      radial-gradient(circle at 12% 8%, rgba(242,137,26,.35), transparent 42%),
+      radial-gradient(circle at 88% 14%, rgba(224,169,76,.3), transparent 40%),
+      radial-gradient(circle at 22% 92%, rgba(29,78,216,.22), transparent 45%),
+      linear-gradient(135deg,#0d1030 0%,#1b1f4f 45%,#241a4d 100%);}
+  #loginOverlay.hide{display:none;}
+  .login-card{width:100%;max-width:360px;background:var(--glass-bg);border:1px solid var(--glass-border);
+    border-radius:18px;padding:28px 24px;text-align:center;box-shadow:0 8px 32px rgba(16,19,46,.35);
+    backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);}
+  .login-card img{height:64px;width:auto;display:block;margin:0 auto 14px;border-radius:12px;}
+  .login-card h2{margin:0 0 4px;font-family:Georgia,'Times New Roman',serif;font-size:20px;color:var(--navy);}
+  .login-card .lsub{margin:0 0 18px;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:600;}
+  .login-card input{width:100%;padding:11px 12px;margin-bottom:10px;border:1px solid var(--border);border-radius:9px;
+    font-size:16px;font-family:inherit;background:#fff;}
+  .login-card input:focus{outline:none;border-color:var(--orange);}
+  .login-card button{width:100%;margin-top:6px;padding:12px;background:var(--orange);color:#fff;border:none;border-radius:9px;
+    font-size:15px;font-weight:700;cursor:pointer;}
+  .login-err{margin-top:10px;font-size:13px;color:var(--red,#dc2626);font-weight:600;min-height:18px;}
+  .shake{animation:shake .4s;}
+  @keyframes shake{
+    0%,100%{transform:translateX(0);}
+    20%,60%{transform:translateX(-9px);}
+    40%,80%{transform:translateX(9px);}
+  }
+</style>
+</head>
+<body>
+  <div id="loginOverlay">
+    <div class="login-card" id="loginCard">
+      <img src="logo.png" alt="Logo">
+      <h2>⛽ Diesel Approval System</h2>
+      <p class="lsub">Director / Developer Login</p>
+      <form id="loginForm">
+        <input type="text" id="loginUser" placeholder="User ID" autocomplete="username" autocapitalize="off">
+        <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password">
+        <button type="submit">Login</button>
+      </form>
+      <div class="login-err" id="loginErr"></div>
+    </div>
+  </div>
+
+  <div class="topbar">
+    <div class="topbar-inner">
+      <img src="logo.png" alt="Logo" class="logo">
+      <div class="title-divider"></div>
+      <div class="topbar-text">
+        <h1>⛽ Diesel Approval System</h1>
+        <p>3-Stage Workflow — Calling Team → Manager → Diesel Team</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="links">
+      <a class="link-card" href="calling-form.html" target="_blank" rel="noopener" style="--accent:var(--orange);">
+        <span class="emoji">📞</span>
+        <div>
+          <div class="title">Stage 1 — Calling Team</div>
+          <div class="sub">Naya diesel request submit karo</div>
+        </div>
+      </a>
+      <a class="link-card" href="manager-approval.html" target="_blank" rel="noopener" style="--accent:var(--navy);">
+        <span class="emoji">🧾</span>
+        <div>
+          <div class="title">Stage 2 — Manager</div>
+          <div class="sub">Request review, edit, approve/reject</div>
+        </div>
+      </a>
+      <a class="link-card" href="diesel-dispense.html" target="_blank" rel="noopener" style="--accent:var(--green);">
+        <span class="emoji">🛢️</span>
+        <div>
+          <div class="title">Stage 3 — Diesel Team</div>
+          <div class="sub">Approved requests list se select karke dispense + receipt</div>
+        </div>
+      </a>
+    </div>
+
+    <div class="note">
+      <b>⚠️ Har team ko sirf uska apna link share karo</b>
+      Calling team ko sirf calling-form.html, Manager ko sirf manager-approval.html, Diesel team ko sirf diesel-dispense.html ka link do — ye page (index.html) sirf aapke reference ke liye hai.
+    </div>
+
+    <div class="section-title">📊 Overview — Sab Requests (Developer / Director view)</div>
+
+    <div class="stats" id="statsRow"><div class="ov-loading">Loading...</div></div>
+
+    <div class="ov-toolbar">
+      <button class="ov-filter active" data-status="">Sab</button>
+      <button class="ov-filter" data-status="Pending">Pending</button>
+      <button class="ov-filter" data-status="Approved">Approved</button>
+      <button class="ov-filter" data-status="Dispensed">Dispensed</button>
+      <button class="ov-filter" data-status="Rejected">Rejected</button>
+      <button class="ov-refresh" id="ovRefresh">↻ Refresh</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Request ID</th><th>Date</th><th>Vehicle</th><th>Odometer (KM)</th><th>Driver</th><th>Status</th>
+            <th>Req. Liters</th><th>Appr. Liters</th><th>Actual Liters</th>
+            <th>Requested By</th><th>Manager</th><th>Dispensed By</th>
+          </tr>
+        </thead>
+        <tbody id="ovBody"><tr><td colspan="12" class="ov-loading">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+  /* ---------- Login gate ---------- */
+  (function(){
+    var USER = 'Admin', PASS = 'Daman@11', KEY = 'dieselAuthAdmin';
+    var overlay = document.getElementById('loginOverlay');
+    var card = document.getElementById('loginCard');
+    var errEl = document.getElementById('loginErr');
+
+    if (sessionStorage.getItem(KEY) === '1') overlay.classList.add('hide');
+
+    document.getElementById('loginForm').addEventListener('submit', function(e){
+      e.preventDefault();
+      var u = document.getElementById('loginUser').value.trim();
+      var p = document.getElementById('loginPass').value;
+      if (u === USER && p === PASS) {
+        sessionStorage.setItem(KEY, '1');
+        overlay.classList.add('hide');
+        errEl.textContent = '';
+      } else {
+        errEl.textContent = 'Galat User ID ya Password';
+        card.classList.remove('shake');
+        void card.offsetWidth; // reflow so the shake animation can replay
+        card.classList.add('shake');
+        if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+        document.getElementById('loginPass').value = '';
+      }
+    });
+  })();
+
+  // Google Apps Script "Web App" deploy karne ke baad jo /exec URL milega wo yahan paste karo
+  var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbybGePj0rLOxG_xdK-XjXtipxm_izdiozm9rgWbKTsY7L7XbFhSrzgs86JNCWvxO-0ipw/exec";
+
+  var statsRow = document.getElementById('statsRow');
+  var ovBody = document.getElementById('ovBody');
+  var allRequests = [];
+  var ovStatus = '';
+
+  document.querySelectorAll('.ov-filter').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.ov-filter').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      ovStatus = btn.getAttribute('data-status');
+      renderTable();
+    });
+  });
+  document.getElementById('ovRefresh').addEventListener('click', loadOverview);
+
+  function loadOverview(){
+    if (!APPS_SCRIPT_URL) {
+      statsRow.innerHTML = '<div class="ov-empty">⚠️ Setup baaki hai: APPS_SCRIPT_URL paste karo.</div>';
+      ovBody.innerHTML = '';
+      return;
+    }
+    ovBody.innerHTML = '<tr><td colspan="12" class="ov-loading">Loading...</td></tr>';
+    fetch(APPS_SCRIPT_URL + '?action=list')
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (!res.ok) { ovBody.innerHTML = '<tr><td colspan="12" class="ov-empty">Error: ' + esc(res.error) + '</td></tr>'; return; }
+        allRequests = res.rows;
+        renderStats();
+        renderTable();
+      })
+      .catch(function(err){
+        ovBody.innerHTML = '<tr><td colspan="12" class="ov-empty">Network error: ' + esc(err.message) + '</td></tr>';
+      });
+  }
+
+  function renderStats(){
+    var counts = { Pending: 0, Approved: 0, Rejected: 0, Dispensed: 0 };
+    var totalActualLiters = 0;
+    allRequests.forEach(function(r){
+      counts[r.status] = (counts[r.status] || 0) + 1;
+      if (r.status === 'Dispensed') totalActualLiters += Number(r.actualLiters) || 0;
+    });
+    var tiles = [
+      { label: 'Total Requests', num: allRequests.length, accent: 'var(--navy)' },
+      { label: 'Pending', num: counts.Pending, accent: '#d97706' },
+      { label: 'Approved', num: counts.Approved, accent: '#16a34a' },
+      { label: 'Dispensed', num: counts.Dispensed, accent: '#1d4ed8' },
+      { label: 'Rejected', num: counts.Rejected, accent: '#dc2626' },
+      { label: 'Liters Dispensed', num: totalActualLiters.toFixed(1), accent: 'var(--orange)' }
+    ];
+    statsRow.innerHTML = tiles.map(function(t){
+      return '<div class="stat-tile" style="--accent:' + t.accent + '"><div class="num">' + t.num + '</div><div class="label">' + t.label + '</div></div>';
+    }).join('');
+  }
+
+  function renderTable(){
+    var rows = ovStatus ? allRequests.filter(function(r){ return r.status === ovStatus; }) : allRequests;
+    if (!rows.length) { ovBody.innerHTML = '<tr><td colspan="12" class="ov-empty">Koi request nahi mili.</td></tr>'; return; }
+    ovBody.innerHTML = rows.map(function(r){
+      // data-label mobile card view me har value ke aage heading dikhata hai
+      return '<tr>' +
+        '<td data-label="Request ID"><b>' + esc(r.id) + '</b></td>' +
+        '<td data-label="Date">' + fmtDate(r.createdAt) + '</td>' +
+        '<td data-label="Vehicle">' + esc(r.vehicleNo) + '</td>' +
+        '<td data-label="Odometer (KM)">' + esc(r.odometerKm || '-') + '</td>' +
+        '<td data-label="Driver">' + esc(r.driverName) + '</td>' +
+        '<td data-label="Status"><span class="status-chip status-' + r.status + '">' + esc(r.status) + '</span></td>' +
+        '<td data-label="Req. Liters">' + esc(r.requestedLiters) + '</td>' +
+        '<td data-label="Appr. Liters">' + esc(r.approvedLiters || '-') + '</td>' +
+        '<td data-label="Actual Liters">' + esc(r.actualLiters || '-') + '</td>' +
+        '<td data-label="Requested By">' + esc(r.requestedBy) + '</td>' +
+        '<td data-label="Manager">' + esc(r.managerName || '-') + '</td>' +
+        '<td data-label="Dispensed By">' + esc(r.dispensedBy || '-') + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function fmtDate(d){ if (!d) return ''; try { return new Date(d).toLocaleString('en-IN'); } catch(e){ return d; } }
+  function esc(s){
+    return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  loadOverview();
+</script>
+</body>
+</html>
