@@ -82,9 +82,19 @@
   .vo-title{font-size:15px;font-weight:800;color:#fff;margin-bottom:10px;text-shadow:0 1px 3px rgba(0,0,0,.4);}
   .vo-body{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:16px;padding:14px;
     box-shadow:0 8px 32px rgba(16,19,46,.2);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);}
-  .vo-search-wrap{position:relative;}
-  .vo-search-wrap::before{content:'🔍';position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none;opacity:.65;}
-  .vo-search-wrap input{padding-left:36px;}
+  .vo-search-wrap{position:relative;max-width:480px;margin:2px auto 18px;}
+  .vo-search-wrap::before{content:'🔍';position:absolute;left:20px;top:50%;transform:translateY(-50%);font-size:17px;pointer-events:none;z-index:1;}
+  .vo-search-wrap input{width:100%;padding:15px 20px 15px 48px;border-radius:999px;border:2px solid var(--orange);
+    background:var(--navy-dark);color:#fff;font-size:15px;font-weight:700;letter-spacing:.3px;text-align:center;
+    box-shadow:0 0 0 3px rgba(242,137,26,.18),0 0 18px rgba(242,137,26,.5),0 0 36px rgba(242,137,26,.28);
+    animation:voNeonPulse 2.6s ease-in-out infinite;transition:border-color .2s;}
+  .vo-search-wrap input::placeholder{color:rgba(255,255,255,.55);font-weight:600;}
+  .vo-search-wrap input:focus{outline:none;border-color:var(--gold);animation:none;
+    box-shadow:0 0 0 4px rgba(224,169,76,.22),0 0 26px rgba(242,137,26,.7),0 0 46px rgba(242,137,26,.4);}
+  @keyframes voNeonPulse{
+    0%,100%{box-shadow:0 0 0 3px rgba(242,137,26,.18),0 0 18px rgba(242,137,26,.5),0 0 36px rgba(242,137,26,.28);}
+    50%{box-shadow:0 0 0 3px rgba(242,137,26,.26),0 0 26px rgba(242,137,26,.68),0 0 48px rgba(242,137,26,.4);}
+  }
   .vo-results{margin-top:4px;}
   .vo-hint{padding:16px 4px;color:var(--muted);font-size:13px;text-align:center;}
   .vo-card{background:rgba(255,255,255,.85);border:1px solid var(--glass-border);border-radius:12px;margin-top:10px;overflow:hidden;
@@ -238,7 +248,7 @@
         <div class="vo-search-wrap">
           <input type="text" id="voSearch" placeholder="Search by vehicle number...">
         </div>
-        <div id="voResults" class="vo-results"><div class="vo-hint">Type a vehicle number to search.</div></div>
+        <div id="voResults" class="vo-results"><div class="vo-hint">Loading...</div></div>
       </div>
     </div>
 
@@ -416,10 +426,9 @@
   }
 
   function renderVehicleOverview(){
-    var q = voSearch.value.trim().toUpperCase();
-    if (!q) { voResults.innerHTML = '<div class="vo-hint">Type a vehicle number to search.</div>'; return; }
     if (!vehicleStats) { voResults.innerHTML = '<div class="vo-hint">Loading...</div>'; return; }
-    var rows = vehicleStats.filter(function(v){ return v.vehicle.toUpperCase().indexOf(q) !== -1; });
+    var q = voSearch.value.trim().toUpperCase();
+    var rows = q ? vehicleStats.filter(function(v){ return v.vehicle.toUpperCase().indexOf(q) !== -1; }) : vehicleStats;
     if (!rows.length) { voResults.innerHTML = '<div class="vo-hint">No vehicles found.</div>'; return; }
     voResults.innerHTML = '';
     rows.forEach(function(v){ voResults.appendChild(buildVoCard(v)); });
