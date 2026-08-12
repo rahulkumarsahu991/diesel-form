@@ -104,14 +104,16 @@
   .my-search-row button{width:auto;margin-top:0;padding:11px 16px;}
 
   .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin:14px 0;}
-  .stat-tile{background:rgba(255,255,255,.6);border:1px solid var(--glass-border);border-top:3px solid var(--accent);
-    border-radius:10px;padding:8px 10px;}
+  .stat-tile{background:rgba(255,255,255,.85);border:1px solid var(--glass-border);border-top:3px solid var(--accent);
+    border-radius:10px;padding:8px 10px;box-shadow:0 3px 10px rgba(16,19,46,.12);
+    backdrop-filter:blur(10px) saturate(180%);-webkit-backdrop-filter:blur(10px) saturate(180%);}
   .stat-tile .num{font-size:18px;font-weight:800;color:var(--ink);}
   .stat-tile .label{font-size:9px;color:var(--muted);margin-top:1px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;}
 
   .ov-toolbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
   .ov-toolbar button{width:auto;margin-top:0;padding:7px 12px;border-radius:8px;border:1px solid var(--border);
-    background:rgba(255,255,255,.7);font-size:12px;font-weight:600;cursor:pointer;color:var(--ink);}
+    background:rgba(255,255,255,.85);font-size:12px;font-weight:600;cursor:pointer;color:var(--ink);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
   .ov-toolbar button.active{background:var(--orange);color:#fff;border-color:var(--orange);}
   /* Touch targets 44px on mobile (Apple/Google minimum recommendation) */
   @media (max-width:640px){
@@ -138,7 +140,8 @@
   .status-Rejected{background:#fee2e2;color:var(--red);}
   .status-Dispensed{background:#dbeafe;color:#1d4ed8;}
 
-  .req-item{background:rgba(255,255,255,.5);border:1px solid var(--glass-border);border-radius:12px;margin-top:8px;overflow:hidden;}
+  .req-item{background:rgba(255,255,255,.85);border:1px solid var(--glass-border);border-radius:12px;margin-top:8px;overflow:hidden;
+    box-shadow:0 4px 14px rgba(16,19,46,.12);backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%);}
   .req-item-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:11px 13px;cursor:pointer;}
   .req-item-head:active{background:rgba(242,137,26,.1);}
   .req-item .chevron{font-size:10px;color:var(--muted);transition:transform .15s;}

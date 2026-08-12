@@ -81,7 +81,8 @@
   .list-body.show{display:block;}
   .list-toolbar{display:flex;gap:6px;flex-wrap:wrap;}
   .list-toolbar button{width:auto;margin-top:0;padding:7px 14px;border-radius:8px;border:1px solid var(--border);
-    background:rgba(255,255,255,.7);font-size:12px;font-weight:600;cursor:pointer;color:var(--ink);}
+    background:rgba(255,255,255,.85);font-size:12px;font-weight:600;cursor:pointer;color:var(--ink);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
   .list-toolbar button.active{background:var(--green);color:#fff;border-color:var(--green);}
   /* Touch targets 44px on mobile (Apple/Google minimum recommendation) */
   @media (max-width:640px){
