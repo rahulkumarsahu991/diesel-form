@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -77,9 +77,9 @@
   .status-Dispensed{background:#dbeafe;color:#1d4ed8;}
   .ov-empty,.ov-loading{padding:30px;text-align:center;color:var(--muted);}
 
-  /* ---------- Mobile: table ko side-scroll ke bajaye stacked cards banao ----------
-     Chhoti screen par 12-column table padhna mushkil hai, isliye har row ek
-     card ban jaati hai jisme har cell ke aage uska heading (data-label) dikhta hai. */
+  /* ---------- Mobile: stack the table into cards instead of side-scrolling ----------
+     A 12-column table is hard to read on a small screen, so each row
+     becomes a card with its column heading (data-label) next to each value. */
   @media (max-width:640px){
     .table-wrap{background:transparent;border:none;box-shadow:none;overflow-x:visible;
       backdrop-filter:none;-webkit-backdrop-filter:none;}
@@ -96,7 +96,7 @@
       text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
     td.ov-empty,td.ov-loading{display:block;text-align:center;}
     td.ov-empty::before,td.ov-loading::before{content:none;}
-    /* Touch targets 44px (Apple/Google dono ki minimum recommendation) */
+    /* Touch targets 44px (Apple/Google minimum recommendation) */
     .ov-toolbar button{padding:11px 16px;font-size:14px;min-height:44px;}
   }
 
@@ -160,7 +160,7 @@
         <span class="emoji">📞</span>
         <div>
           <div class="title">Stage 1 — Calling Team</div>
-          <div class="sub">Naya diesel request submit karo</div>
+          <div class="sub">Submit a new diesel request</div>
         </div>
       </a>
       <a class="link-card" href="manager-approval.html" target="_blank" rel="noopener" style="--accent:var(--navy);">
@@ -174,22 +174,22 @@
         <span class="emoji">🛢️</span>
         <div>
           <div class="title">Stage 3 — Diesel Team</div>
-          <div class="sub">Approved requests list se select karke dispense + receipt</div>
+          <div class="sub">Select from Approved requests, dispense + receipt</div>
         </div>
       </a>
     </div>
 
     <div class="note">
-      <b>⚠️ Har team ko sirf uska apna link share karo</b>
-      Calling team ko sirf calling-form.html, Manager ko sirf manager-approval.html, Diesel team ko sirf diesel-dispense.html ka link do — ye page (index.html) sirf aapke reference ke liye hai.
+      <b>⚠️ Share only each team's own link with them</b>
+      Give the Calling team only calling-form.html, the Manager only manager-approval.html, and the Diesel team only diesel-dispense.html — this page (index.html) is for your reference only.
     </div>
 
-    <div class="section-title">📊 Overview — Sab Requests (Developer / Director view)</div>
+    <div class="section-title">📊 Overview — All Requests (Developer / Director view)</div>
 
     <div class="stats" id="statsRow"><div class="ov-loading">Loading...</div></div>
 
     <div class="ov-toolbar">
-      <button class="ov-filter active" data-status="">Sab</button>
+      <button class="ov-filter active" data-status="">All</button>
       <button class="ov-filter" data-status="Pending">Pending</button>
       <button class="ov-filter" data-status="Approved">Approved</button>
       <button class="ov-filter" data-status="Dispensed">Dispensed</button>
@@ -230,7 +230,7 @@
         overlay.classList.add('hide');
         errEl.textContent = '';
       } else {
-        errEl.textContent = 'Galat User ID ya Password';
+        errEl.textContent = 'Invalid User ID or Password';
         card.classList.remove('shake');
         void card.offsetWidth; // reflow so the shake animation can replay
         card.classList.add('shake');
@@ -240,7 +240,7 @@
     });
   })();
 
-  // Google Apps Script "Web App" deploy karne ke baad jo /exec URL milega wo yahan paste karo
+  // Paste the /exec URL here after deploying the Google Apps Script "Web App"
   var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbybGePj0rLOxG_xdK-XjXtipxm_izdiozm9rgWbKTsY7L7XbFhSrzgs86JNCWvxO-0ipw/exec";
 
   var statsRow = document.getElementById('statsRow');
@@ -260,7 +260,7 @@
 
   function loadOverview(){
     if (!APPS_SCRIPT_URL) {
-      statsRow.innerHTML = '<div class="ov-empty">⚠️ Setup baaki hai: APPS_SCRIPT_URL paste karo.</div>';
+      statsRow.innerHTML = '<div class="ov-empty">⚠️ Setup pending: paste the APPS_SCRIPT_URL.</div>';
       ovBody.innerHTML = '';
       return;
     }
@@ -300,9 +300,9 @@
 
   function renderTable(){
     var rows = ovStatus ? allRequests.filter(function(r){ return r.status === ovStatus; }) : allRequests;
-    if (!rows.length) { ovBody.innerHTML = '<tr><td colspan="12" class="ov-empty">Koi request nahi mili.</td></tr>'; return; }
+    if (!rows.length) { ovBody.innerHTML = '<tr><td colspan="12" class="ov-empty">No requests found.</td></tr>'; return; }
     ovBody.innerHTML = rows.map(function(r){
-      // data-label mobile card view me har value ke aage heading dikhata hai
+      // data-label shows a heading next to each value in the mobile card view
       return '<tr>' +
         '<td data-label="Request ID"><b>' + esc(r.id) + '</b></td>' +
         '<td data-label="Date">' + fmtDate(r.createdAt) + '</td>' +

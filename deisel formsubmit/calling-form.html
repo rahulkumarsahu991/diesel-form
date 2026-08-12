@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -113,11 +113,23 @@
   .ov-toolbar button{width:auto;margin-top:0;padding:7px 12px;border-radius:8px;border:1px solid var(--border);
     background:rgba(255,255,255,.7);font-size:12px;font-weight:600;cursor:pointer;color:var(--ink);}
   .ov-toolbar button.active{background:var(--orange);color:#fff;border-color:var(--orange);}
-  /* Mobile par touch targets 44px (Apple/Google minimum recommendation) */
+  /* Touch targets 44px on mobile (Apple/Google minimum recommendation) */
   @media (max-width:640px){
     .ov-toolbar button{padding:11px 16px;font-size:14px;min-height:44px;}
     .req-item-head{padding:14px 13px;}
   }
+
+  /* ---------- Mode toggle: pill switch with a sliding highlight ---------- */
+  .mode-toggle{position:relative;display:flex;background:rgba(27,31,79,.06);border:1px solid var(--glass-border);
+    border-radius:14px;padding:4px;margin-bottom:14px;gap:4px;}
+  .mode-toggle .slider{position:absolute;top:4px;bottom:4px;left:4px;width:calc(50% - 4px);border-radius:11px;
+    background:linear-gradient(135deg,var(--orange),var(--orange-dark));box-shadow:0 3px 10px rgba(242,137,26,.4);
+    transition:transform .28s cubic-bezier(.4,0,.2,1);z-index:0;}
+  .mode-toggle.pos-1 .slider{transform:translateX(100%);}
+  .mode-toggle button{position:relative;z-index:1;flex:1;width:auto;margin:0;padding:11px 10px;border:none;
+    background:transparent;border-radius:11px;font-size:13px;font-weight:700;color:var(--navy);cursor:pointer;
+    min-height:44px;transition:color .22s;white-space:nowrap;}
+  .mode-toggle button.active{color:#fff;}
 
   .status-chip{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;text-transform:uppercase;}
   .status-Pending{background:#fef3c7;color:#d97706;}
@@ -196,23 +208,23 @@
       <form id="reqForm">
         <label>Vehicle No <span class="req">*</span></label>
         <div class="autocomplete-wrap">
-          <input type="text" id="vehicleNo" required autocomplete="off" placeholder="Type karke search karo...">
+          <input type="text" id="vehicleNo" required autocomplete="off" placeholder="Type to search...">
           <div class="suggestions" id="vehicleSuggestions"></div>
         </div>
         <div class="history-box" id="vehicleHistory"></div>
 
         <label>Driver ID <span class="req">*</span></label>
-        <input type="text" id="driverId" required autocomplete="off" placeholder="Driver ID daalo">
+        <input type="text" id="driverId" required autocomplete="off" placeholder="Enter Driver ID">
         <div class="driver-info" id="driverInfo"></div>
 
         <div class="row2">
           <div>
             <label>Driver Name (auto)</label>
-            <input type="text" id="driverNameAuto" readonly placeholder="Driver ID se auto-fill hoga">
+            <input type="text" id="driverNameAuto" readonly placeholder="Auto-fills from Driver ID">
           </div>
           <div>
             <label>Contact Number (auto)</label>
-            <input type="tel" id="contactNumber" readonly placeholder="Driver ID se auto-fill hoga">
+            <input type="tel" id="contactNumber" readonly placeholder="Auto-fills from Driver ID">
           </div>
         </div>
 
@@ -230,16 +242,16 @@
 
         <label>Current Location</label>
         <div class="location-row">
-          <input type="text" id="currentLocation" placeholder="e.g. NH-6 ke paas, Bilaspur">
+          <input type="text" id="currentLocation" placeholder="e.g. near NH-6, Bilaspur">
           <button type="button" id="useLocationBtn">📍 Use My Location</button>
         </div>
         <div class="driver-info" id="locationInfo"></div>
 
-        <label>Requested By (aapka naam) <span class="req">*</span></label>
-        <input type="text" id="requestedBy" required placeholder="Aapka naam">
+        <label>Requested By (your name) <span class="req">*</span></label>
+        <input type="text" id="requestedBy" required placeholder="Your name">
 
         <label>Remarks</label>
-        <textarea id="callingRemarks" placeholder="Koi extra jaankari (optional)"></textarea>
+        <textarea id="callingRemarks" placeholder="Any extra info (optional)"></textarea>
 
         <button type="submit" id="submitBtn">Submit Request</button>
       </form>
@@ -249,20 +261,21 @@
 
     <div class="list-panel">
       <button class="list-toggle" id="myReqToggle" type="button">
-        <span>📋 Meri Requests — status dekho</span>
+        <span>📋 My Requests — check status</span>
         <span id="myReqChevron">▾</span>
       </button>
       <div class="list-body" id="myReqBody">
-        <div class="ov-toolbar" id="myModeToolbar">
-          <button class="my-mode active" type="button" data-mode="name">🔍 Naam Se</button>
-          <button class="my-mode" type="button" data-mode="all">📋 Sab Requests</button>
+        <div class="mode-toggle" id="myModeToolbar">
+          <span class="slider"></span>
+          <button class="my-mode active" type="button" data-mode="name">🔍 Search by Name</button>
+          <button class="my-mode" type="button" data-mode="all">📋 All Requests</button>
         </div>
         <div class="my-search-row" id="myNameRow">
-          <input type="text" id="myNameInput" placeholder="Apna naam likho (jaise 'Requested By' me likha)">
+          <input type="text" id="myNameInput" placeholder="Enter your name (as written in 'Requested By')">
         </div>
         <div class="stats" id="myStats" style="display:none;"></div>
         <div class="ov-toolbar" id="myToolbar" style="display:none;">
-          <button class="my-filter active" data-status="">Sab</button>
+          <button class="my-filter active" data-status="">All</button>
           <button class="my-filter" data-status="Pending">Pending</button>
           <button class="my-filter" data-status="Approved">Approved</button>
           <button class="my-filter" data-status="Dispensed">Dispensed</button>
@@ -292,7 +305,7 @@
         overlay.classList.add('hide');
         errEl.textContent = '';
       } else {
-        errEl.textContent = 'Galat User ID ya Password';
+        errEl.textContent = 'Invalid User ID or Password';
         card.classList.remove('shake');
         void card.offsetWidth; // reflow so the shake animation can replay
         card.classList.add('shake');
@@ -302,19 +315,19 @@
     });
   })();
 
-  // Google Apps Script "Web App" deploy karne ke baad jo /exec URL milega wo yahan paste karo
+  // Paste the /exec URL here after deploying the Google Apps Script "Web App"
   var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbybGePj0rLOxG_xdK-XjXtipxm_izdiozm9rgWbKTsY7L7XbFhSrzgs86JNCWvxO-0ipw/exec";
 
   var form = document.getElementById('reqForm');
   var msgBox = document.getElementById('msgBox');
   var submitBtn = document.getElementById('submitBtn');
 
-  /* ---------- Dropdown lists: ek hi call + localStorage cache ----------
-     Apps Script har request par ~2.5s leta hai (payload chhota ho tab bhi),
-     isliye teeno lists ek hi call me aati hain aur browser me 6 ghante cache
-     hoti hain — repeat visits par suggestions turant (0ms) mil jaati hain. */
+  /* ---------- Dropdown lists: one call + localStorage cache ----------
+     Apps Script takes ~2.5s per request (even for a tiny payload), so all
+     three lists come in a single call and are cached in the browser for
+     6 hours — repeat visits get suggestions instantly (0ms). */
   var LISTS_CACHE_KEY = 'dieselLists';
-  var LISTS_TTL_MS = 6 * 60 * 60 * 1000; // 6 ghante (server cache jitna hi)
+  var LISTS_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours (matches server cache)
   var listsData = { vehicles: [], pumps: [], routes: [] };
   var listsLoaded = false;
   var listsWaiters = [];
@@ -329,11 +342,11 @@
           listsLoaded = true;
         }
       }
-    } catch (e) { /* corrupt cache — ignore, network se le lenge */ }
+    } catch (e) { /* corrupt cache — ignore, fetch fresh from network */ }
 
     if (!APPS_SCRIPT_URL) { listsLoaded = true; return; }
 
-    // Cache fresh ho to bhi background me refresh kar lete hain (stale-while-revalidate)
+    // Refresh in the background even if the cache is fresh (stale-while-revalidate)
     fetch(APPS_SCRIPT_URL + '?action=lists')
       .then(function(r){ return r.json(); })
       .then(function(res){
@@ -341,7 +354,7 @@
         listsData = { vehicles: res.vehicles || [], pumps: res.pumps || [], routes: res.routes || [] };
         try { localStorage.setItem(LISTS_CACHE_KEY, JSON.stringify({ t: Date.now(), d: listsData })); } catch (e) {}
       })
-      .catch(function(){ /* offline — cache/typed value se kaam chalega */ })
+      .catch(function(){ /* offline — cache/typed value still works */ })
       .finally(function(){
         listsLoaded = true;
         listsWaiters.forEach(function(fn){ fn(); });
@@ -353,7 +366,7 @@
   function setupAutocomplete(inputEl, suggestionsEl, listKey, onSelect){
     if (!listsLoaded) {
       listsWaiters.push(function(){
-        // Data aa gaya — agar user pehle se type kar chuka hai to suggestions turant refresh karo
+        // Data has arrived — if the user already typed something, refresh suggestions right away
         if (document.activeElement === inputEl && inputEl.value.trim()) render(inputEl.value.trim());
       });
     }
@@ -363,7 +376,7 @@
       var loaded = listsLoaded;
       if (!query) { suggestionsEl.classList.remove('show'); return; }
       if (!loaded) {
-        suggestionsEl.innerHTML = '<div class="none">Dhoond rahe hain...</div>';
+        suggestionsEl.innerHTML = '<div class="none">Searching...</div>';
         suggestionsEl.classList.add('show');
         return;
       }
@@ -371,7 +384,7 @@
       var q = query.toUpperCase();
       var matches = list.filter(function(v){ return v.toUpperCase().indexOf(q) !== -1; }).slice(0, 8);
       if (!matches.length) {
-        suggestionsEl.innerHTML = '<div class="none">Koi match nahi mila — apna typed value hi use hoga</div>';
+        suggestionsEl.innerHTML = '<div class="none">No match found — your typed value will be used</div>';
         suggestionsEl.classList.add('show');
         return;
       }
@@ -413,7 +426,7 @@
     if (!vehicle || !APPS_SCRIPT_URL) { vehicleHistoryBox.style.display = 'none'; return; }
     vehicleHistoryBox.style.display = 'block';
     vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last Refueling</div><div class="h-msg">Loading...</div>';
-    // Server par hi filter/trim hota hai — poori request list download nahi hoti
+    // Filtering/trimming happens on the server — the full request list is never downloaded
     fetch(APPS_SCRIPT_URL + '?action=history&limit=5&vehicle=' + encodeURIComponent(vehicle))
       .then(function(r){ return r.json(); })
       .then(function(res){
@@ -421,7 +434,7 @@
         if (!res.ok) { vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 Last Refueling</div><div class="h-msg">Error: ' + esc(res.error) + '</div>'; return; }
         var entries = res.rows;
         if (!entries.length) {
-          vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last Refueling</div><div class="h-msg">Is vehicle ki koi purani refueling nahi mili.</div>';
+          vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last Refueling</div><div class="h-msg">No previous refueling found for this vehicle.</div>';
           return;
         }
         vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last ' + entries.length + ' Refueling</div>' +
@@ -444,25 +457,25 @@
   useLocationBtn.addEventListener('click', function(){
     if (!navigator.geolocation) {
       locationInfo.className = 'driver-info err';
-      locationInfo.textContent = 'Ye device/browser GPS support nahi karta — manually likh do.';
+      locationInfo.textContent = 'This device/browser does not support GPS — please enter manually.';
       return;
     }
     useLocationBtn.disabled = true;
     useLocationBtn.textContent = 'Locating...';
     locationInfo.className = 'driver-info loading';
-    locationInfo.textContent = 'Location dhoond rahe hain...';
+    locationInfo.textContent = 'Locating...';
 
     navigator.geolocation.getCurrentPosition(function(pos){
       var lat = pos.coords.latitude.toFixed(5);
       var lon = pos.coords.longitude.toFixed(5);
       currentLocationInput.value = lat + ', ' + lon;
       locationInfo.className = 'driver-info ok';
-      locationInfo.textContent = '✅ Location mil gayi (map link ke liye copy karo: https://maps.google.com/?q=' + lat + ',' + lon + ')';
+      locationInfo.textContent = '✅ Location found (copy for a map link: https://maps.google.com/?q=' + lat + ',' + lon + ')';
       useLocationBtn.disabled = false;
       useLocationBtn.textContent = '📍 Use My Location';
     }, function(err){
       locationInfo.className = 'driver-info err';
-      locationInfo.textContent = '❌ Location nahi mili (' + err.message + ') — manually type kar do.';
+      locationInfo.textContent = '❌ Could not get location (' + err.message + ') — please type it manually.';
       useLocationBtn.disabled = false;
       useLocationBtn.textContent = '📍 Use My Location';
     }, { enableHighAccuracy: true, timeout: 10000 });
@@ -485,11 +498,11 @@
     if (!id) { driverInfo.className = 'driver-info'; return; }
     if (!APPS_SCRIPT_URL) {
       driverInfo.className = 'driver-info err';
-      driverInfo.textContent = 'Setup baaki hai: APPS_SCRIPT_URL paste karo.';
+      driverInfo.textContent = 'Setup pending: paste the APPS_SCRIPT_URL.';
       return;
     }
     driverInfo.className = 'driver-info loading';
-    driverInfo.textContent = 'Dhoond rahe hain...';
+    driverInfo.textContent = 'Searching...';
     driverTimer = setTimeout(function(){ fetchDriver(id); }, 400);
   });
 
@@ -521,11 +534,11 @@
     e.preventDefault();
 
     if (!APPS_SCRIPT_URL) {
-      showMsg('err', 'Setup baaki hai: Code.gs deploy karke APPS_SCRIPT_URL yahan HTML me paste karo.');
+      showMsg('err', 'Setup pending: deploy Code.gs and paste the APPS_SCRIPT_URL here in the HTML.');
       return;
     }
     if (!fetchedDriver) {
-      showMsg('err', '❌ Pehle valid Driver ID daalo — Name/Mobile fetch hone do (upar hara message dikhega).');
+      showMsg('err', '❌ Enter a valid Driver ID first — let Name/Mobile fetch (a green message will show above).');
       driverIdInput.focus();
       return;
     }
@@ -558,7 +571,7 @@
       if (res.ok) {
         localStorage.setItem('dieselCallerName', payload.requestedBy);
         myNameInput.value = payload.requestedBy;
-        showMsg('ok', '✅ Request submit ho gayi! Manager ko ye Request ID batao:<br><span class="req-id">' + res.requestId + '</span><div class="hint">Manager approve karega, uske baad diesel team ko seedha dikhegi.</div>');
+        showMsg('ok', '✅ Request submitted! Give this Request ID to the Manager:<br><span class="req-id">' + res.requestId + '</span><div class="hint">The Manager will approve it, after which it will show directly to the Diesel Team.</div>');
         form.reset();
         fetchedDriver = null;
         driverInfo.className = 'driver-info';
@@ -594,7 +607,7 @@
     try { return new Date(d).toLocaleString('en-IN'); } catch(e){ return d; }
   }
 
-  /* ---------- Meri Requests: apni submitted requests ka status dekho ---------- */
+  /* ---------- My Requests: check status of submitted requests ---------- */
   var myReqToggle = document.getElementById('myReqToggle');
   var myReqChevron = document.getElementById('myReqChevron');
   var myReqBody = document.getElementById('myReqBody');
@@ -617,10 +630,12 @@
     if (open && (myMode === 'all' || myNameInput.value.trim())) loadMyRequests();
   });
 
-  document.querySelectorAll('.my-mode').forEach(function(btn){
+  var myModeToolbar = document.getElementById('myModeToolbar');
+  document.querySelectorAll('.my-mode').forEach(function(btn, idx){
     btn.addEventListener('click', function(){
       document.querySelectorAll('.my-mode').forEach(function(b){ b.classList.remove('active'); });
       btn.classList.add('active');
+      myModeToolbar.classList.toggle('pos-1', idx === 1);
       myMode = btn.getAttribute('data-mode');
       if (myMode === 'all') {
         myNameRow.style.display = 'none';
@@ -658,11 +673,11 @@
       ? APPS_SCRIPT_URL + '?action=list&limit=150'
       : APPS_SCRIPT_URL + '?action=list&by=' + encodeURIComponent(name);
     myReqList.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:13px;">Loading...</div>';
-    // "Sab Requests" me server se latest 150 aati hain; "Naam Se" me server par hi naam se filter hota hai
+    // "All Requests" gets the latest 150 from the server; "Search by Name" filters by name on the server
     fetch(url)
       .then(function(r){ return r.json(); })
       .then(function(res){
-        if (myMode !== (isAll ? 'all' : 'name')) return; // mode badal gaya, purana response ignore
+        if (myMode !== (isAll ? 'all' : 'name')) return; // mode changed, ignore stale response
         if (!isAll && myNameInput.value.trim() !== name) return; // stale
         if (!res.ok) { myReqList.innerHTML = '<div style="padding:10px;color:var(--red);font-size:13px;">Error: ' + esc(res.error) + '</div>'; return; }
         myAllRows = res.rows;
@@ -693,7 +708,7 @@
 
   function renderMyList(){
     var rows = myStatus ? myAllRows.filter(function(r){ return r.status === myStatus; }) : myAllRows;
-    if (!rows.length) { myReqList.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:13px;">Koi request nahi mili.</div>'; return; }
+    if (!rows.length) { myReqList.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:13px;">No requests found.</div>'; return; }
     myReqList.innerHTML = '';
     rows.forEach(function(r){ myReqList.appendChild(renderMyCard(r)); });
   }

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -83,7 +83,7 @@
   .list-toolbar button{width:auto;margin-top:0;padding:7px 14px;border-radius:8px;border:1px solid var(--border);
     background:rgba(255,255,255,.7);font-size:12px;font-weight:600;cursor:pointer;color:var(--ink);}
   .list-toolbar button.active{background:var(--green);color:#fff;border-color:var(--green);}
-  /* Mobile par touch targets 44px (Apple/Google minimum recommendation) */
+  /* Touch targets 44px on mobile (Apple/Google minimum recommendation) */
   @media (max-width:640px){
     .list-toolbar button{padding:11px 16px;font-size:14px;min-height:44px;}
     .list-toggle{padding:14px 16px;min-height:48px;}
@@ -187,7 +187,7 @@
 
       <label>Diesel Pump / Location <span style="color:var(--red)">*</span></label>
       <div class="autocomplete-wrap">
-        <input type="text" id="pumpLocation" autocomplete="off" placeholder="Type karke search karo...">
+        <input type="text" id="pumpLocation" autocomplete="off" placeholder="Type to search...">
         <div class="suggestions" id="pumpSuggestions"></div>
       </div>
 
@@ -195,10 +195,10 @@
       <input type="number" id="ratePerLiter" min="0.01" step="0.01" placeholder="e.g. 92.50">
 
       <label>Amount (₹)</label>
-      <input type="text" id="amount" readonly placeholder="Rate daalte hi calculate hoga">
+      <input type="text" id="amount" readonly placeholder="Calculates automatically once rate is entered">
 
-      <label>Dispensed By (aapka naam) <span style="color:var(--red)">*</span></label>
-      <input type="text" id="dispensedBy" placeholder="Aapka naam">
+      <label>Dispensed By (your name) <span style="color:var(--red)">*</span></label>
+      <input type="text" id="dispensedBy" placeholder="Your name">
 
       <button id="confirmBtn">✔ Confirm & Generate Receipt</button>
       <div class="msg" id="dispenseMsg"></div>
@@ -212,11 +212,11 @@
 
     <div class="list-panel no-print">
       <button class="list-toggle" id="listToggle">
-        <span>📋 Requests — status dekho</span>
+        <span>📋 Requests — check status</span>
         <span id="listChevron">▾</span>
       </button>
       <div class="list-body" id="listBody">
-        <input type="text" id="listSearch" placeholder="Vehicle No ya Request ID se search karo..." style="margin-bottom:10px;">
+        <input type="text" id="listSearch" placeholder="Search by Vehicle No or Request ID..." style="margin-bottom:10px;">
         <div class="list-toolbar">
           <button class="list-filter" data-status="Pending">Pending</button>
           <button class="list-filter active" data-status="Approved">Approved</button>
@@ -247,7 +247,7 @@
         overlay.classList.add('hide');
         errEl.textContent = '';
       } else {
-        errEl.textContent = 'Galat User ID ya Password';
+        errEl.textContent = 'Invalid User ID or Password';
         card.classList.remove('shake');
         void card.offsetWidth; // reflow so the shake animation can replay
         card.classList.add('shake');
@@ -257,7 +257,7 @@
     });
   })();
 
-  // Google Apps Script "Web App" deploy karne ke baad jo /exec URL milega wo yahan paste karo
+  // Paste the /exec URL here after deploying the Google Apps Script "Web App"
   var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbybGePj0rLOxG_xdK-XjXtipxm_izdiozm9rgWbKTsY7L7XbFhSrzgs86JNCWvxO-0ipw/exec";
 
   var verifiedRow = null;
@@ -274,8 +274,8 @@
   var pumpSuggestions = document.getElementById('pumpSuggestions');
   var allPumps = [];
 
-  /* Pump list browser me 6 ghante cache hoti hai — Apps Script har call par
-     ~2.5s leta hai, isliye repeat visits par suggestions turant milti hain. */
+  /* Pump list is cached in the browser for 6 hours — Apps Script takes ~2.5s
+     per call, so repeat visits get suggestions instantly. */
   (function loadPumps(){
     var KEY = 'dieselPumps', TTL = 6 * 60 * 60 * 1000;
     try {
@@ -284,7 +284,7 @@
         var c = JSON.parse(raw);
         if (c && (Date.now() - c.t) < TTL && c.d) allPumps = c.d;
       }
-    } catch (e) { /* corrupt cache — network se le lenge */ }
+    } catch (e) { /* corrupt cache — fetch fresh from network */ }
 
     if (!APPS_SCRIPT_URL) return;
     fetch(APPS_SCRIPT_URL + '?action=pumps')
@@ -295,7 +295,7 @@
         try { localStorage.setItem(KEY, JSON.stringify({ t: Date.now(), d: allPumps })); } catch (e) {}
         if (document.activeElement === pumpInput && pumpInput.value.trim()) renderPumpSuggestions(pumpInput.value.trim());
       })
-      .catch(function(){ /* offline — cache/typed value se kaam chalega */ });
+      .catch(function(){ /* offline — cache/typed value still works */ });
   })();
 
   pumpInput.addEventListener('input', function(){ renderPumpSuggestions(pumpInput.value.trim()); });
@@ -307,7 +307,7 @@
     var q = query.toUpperCase();
     var matches = allPumps.filter(function(v){ return v.toUpperCase().indexOf(q) !== -1; }).slice(0, 8);
     if (!matches.length) {
-      pumpSuggestions.innerHTML = '<div class="none">Koi match nahi mila — apna typed value hi use hoga</div>';
+      pumpSuggestions.innerHTML = '<div class="none">No match found — your typed value will be used</div>';
       pumpSuggestions.classList.add('show');
       return;
     }
@@ -326,8 +326,8 @@
     var msg = document.getElementById('verifyMsg');
     msg.className = 'msg';
 
-    if (!APPS_SCRIPT_URL) { showErr(msg, 'Setup baaki hai: Code.gs deploy karke APPS_SCRIPT_URL yahan HTML me paste karo.'); return; }
-    if (!id) { showErr(msg, 'Request ID bharo.'); return; }
+    if (!APPS_SCRIPT_URL) { showErr(msg, 'Setup pending: deploy Code.gs and paste the APPS_SCRIPT_URL here in the HTML.'); return; }
+    if (!id) { showErr(msg, 'Enter a Request ID.'); return; }
     document.getElementById('reqId').value = id;
 
     var btn = document.getElementById('verifyBtn');
@@ -375,8 +375,8 @@
     var pumpLocation = pumpInput.value.trim();
     var ratePerLiter = document.getElementById('ratePerLiter').value;
     var dispensedBy = document.getElementById('dispensedBy').value.trim();
-    if (!pumpLocation) { showErr(msg, 'Diesel Pump / Location bharo.'); return; }
-    if (!ratePerLiter || !dispensedBy) { showErr(msg, 'Rate per Liter aur naam dono bharo.'); return; }
+    if (!pumpLocation) { showErr(msg, 'Enter the Diesel Pump / Location.'); return; }
+    if (!ratePerLiter || !dispensedBy) { showErr(msg, 'Enter both Rate per Liter and your name.'); return; }
 
     var btn = document.getElementById('confirmBtn');
     btn.disabled = true; btn.textContent = 'Saving...';
@@ -485,7 +485,7 @@
 
   function loadRequestsList(){
     if (!APPS_SCRIPT_URL) {
-      approvedList.innerHTML = '<div style="padding:10px;color:var(--muted);">Setup baaki hai.</div>';
+      approvedList.innerHTML = '<div style="padding:10px;color:var(--muted);">Setup pending.</div>';
       return;
     }
     var token = ++listRequestToken;
@@ -507,7 +507,7 @@
   }
 
   function renderApprovedList(rows){
-    if (!rows.length) { approvedList.innerHTML = '<div style="padding:10px;color:var(--muted);">Koi request nahi mili.</div>'; return; }
+    if (!rows.length) { approvedList.innerHTML = '<div style="padding:10px;color:var(--muted);">No requests found.</div>'; return; }
     approvedList.innerHTML = '';
     rows.forEach(function(r){ approvedList.appendChild(buildReqCard(r)); });
   }
@@ -553,7 +553,7 @@
       var useBtn = document.createElement('button');
       useBtn.type = 'button';
       useBtn.className = 'use-id-btn';
-      useBtn.textContent = '⬆️ Dispense karo';
+      useBtn.textContent = '⬆️ Dispense This';
       useBtn.addEventListener('click', function(e){
         e.stopPropagation();
         listBody.classList.remove('show');

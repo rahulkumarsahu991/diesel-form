@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -52,7 +52,7 @@
   .refresh{background:rgba(255,255,255,.7);border:1px solid var(--border);border-radius:8px;padding:9px 14px;
     color:var(--orange-dark);font-weight:600;font-size:13px;cursor:pointer;}
   @media (min-width:560px){ .refresh{margin-left:auto;} }
-  /* Mobile par touch targets 44px (Apple/Google minimum recommendation) */
+  /* Touch targets 44px on mobile (Apple/Google minimum recommendation) */
   @media (max-width:640px){
     .toolbar button,.refresh{padding:11px 16px;font-size:14px;min-height:44px;}
     .card-head{padding:14px 16px;}
@@ -175,7 +175,7 @@
   <div class="wrap">
     <div class="top-controls">
       <label style="margin-bottom:2px;">Manager Name</label>
-      <input type="text" id="managerName" placeholder="Aapka naam (approve/reject par save hoga)">
+      <input type="text" id="managerName" placeholder="Your name (saved when you approve/reject)">
 
       <div class="toolbar">
         <button class="filter-btn active" data-status="Pending">Pending</button>
@@ -189,11 +189,11 @@
 
     <div class="vo-panel">
       <button class="vo-toggle" id="voToggle">
-        <span>🚚 Vehicle-wise Overview — kitni baar OTP liya, last kitna diesel dala</span>
+        <span>🚚 Vehicle-wise Overview — OTP count, last diesel dispensed</span>
         <span class="chevron" id="voChevron">▾</span>
       </button>
       <div class="vo-body" id="voBody">
-        <input type="text" id="voSearch" placeholder="Vehicle number se search karo...">
+        <input type="text" id="voSearch" placeholder="Search by vehicle number...">
         <div class="vo-table-wrap">
           <table>
             <thead>
@@ -225,7 +225,7 @@
         overlay.classList.add('hide');
         errEl.textContent = '';
       } else {
-        errEl.textContent = 'Galat User ID ya Password';
+        errEl.textContent = 'Invalid User ID or Password';
         card.classList.remove('shake');
         void card.offsetWidth; // reflow so the shake animation can replay
         card.classList.add('shake');
@@ -235,7 +235,7 @@
     });
   })();
 
-  // Google Apps Script "Web App" deploy karne ke baad jo /exec URL milega wo yahan paste karo
+  // Paste the /exec URL here after deploying the Google Apps Script "Web App"
   var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbybGePj0rLOxG_xdK-XjXtipxm_izdiozm9rgWbKTsY7L7XbFhSrzgs86JNCWvxO-0ipw/exec";
 
   var listEl = document.getElementById('list');
@@ -253,7 +253,7 @@
 
   function loadList(){
     if (!APPS_SCRIPT_URL) {
-      listEl.innerHTML = '<div class="empty">⚠️ Setup baaki hai: Code.gs deploy karke APPS_SCRIPT_URL yahan HTML me paste karo.</div>';
+      listEl.innerHTML = '<div class="empty">⚠️ Setup pending: deploy Code.gs and paste the APPS_SCRIPT_URL here in the HTML.</div>';
       return;
     }
     listEl.innerHTML = '<div class="empty">Loading...</div>';
@@ -267,7 +267,7 @@
   }
 
   function renderList(rows){
-    if (!rows.length) { listEl.innerHTML = '<div class="empty">Koi request nahi mili.</div>'; return; }
+    if (!rows.length) { listEl.innerHTML = '<div class="empty">No requests found.</div>'; return; }
     listEl.innerHTML = '';
     rows.forEach(function(row){ listEl.appendChild(renderCard(row)); });
   }
@@ -325,7 +325,7 @@
       var note = document.createElement('div');
       note.className = 'meta';
       note.style.marginTop = '10px';
-      note.textContent = 'Approved by ' + (row.managerName || '-') + ' • Diesel team ko ab ye request unke "Approved Requests" list me seedha dikhegi.';
+      note.textContent = 'Approved by ' + (row.managerName || '-') + ' • This request will now show directly in the Diesel Team\'s "Approved Requests" list.';
       body.appendChild(note);
     }
 
@@ -354,7 +354,7 @@
   function doApprove(id, card, body, actions){
     var fields = readFields(card);
     var managerName = document.getElementById('managerName').value.trim();
-    if (!managerName) { alert('Pehle Manager Name bharo (upar).'); return; }
+    if (!managerName) { alert('Please fill in Manager Name first (above).'); return; }
 
     setActionsLoading(actions, true);
     fetch(APPS_SCRIPT_URL, {
@@ -371,7 +371,7 @@
       actions.remove();
       var box = document.createElement('div');
       box.className = 'otp-box';
-      box.innerHTML = '<div style="color:var(--green);font-weight:700;">✔ Approved</div><div class="hint">Diesel team ki "Approved Requests" list me turant dikhega — Request ID: ' + res.requestId + '</div>';
+      box.innerHTML = '<div style="color:var(--green);font-weight:700;">✔ Approved</div><div class="hint">Will show instantly in the Diesel Team\'s "Approved Requests" list — Request ID: ' + res.requestId + '</div>';
       body.appendChild(box);
     }).catch(function(err){ showCardError(body, err.message); setActionsLoading(actions, false); });
   }
@@ -379,8 +379,8 @@
   function doReject(id, card, body, actions){
     var fields = readFields(card);
     var managerName = document.getElementById('managerName').value.trim();
-    if (!managerName) { alert('Pehle Manager Name bharo (upar).'); return; }
-    if (!confirm('Ye request reject karni hai?')) return;
+    if (!managerName) { alert('Please fill in Manager Name first (above).'); return; }
+    if (!confirm('Reject this request?')) return;
 
     setActionsLoading(actions, true);
     fetch(APPS_SCRIPT_URL, {
@@ -432,7 +432,7 @@
 
   function loadVehicleOverview(){
     if (!APPS_SCRIPT_URL) {
-      voTableBody.innerHTML = '<tr><td colspan="6" style="padding:14px;color:var(--muted);">Setup baaki hai.</td></tr>';
+      voTableBody.innerHTML = '<tr><td colspan="6" style="padding:14px;color:var(--muted);">Setup pending.</td></tr>';
       return;
     }
     voTableBody.innerHTML = '<tr><td colspan="6" style="padding:14px;color:var(--muted);">Loading...</td></tr>';
@@ -487,7 +487,7 @@
     var q = voSearch.value.trim().toUpperCase();
     var rows = q ? vehicleStats.filter(function(v){ return v.vehicle.toUpperCase().indexOf(q) !== -1; }) : vehicleStats;
     voVisibleRows = rows;
-    if (!rows.length) { voTableBody.innerHTML = '<tr><td colspan="6" style="padding:14px;color:var(--muted);">Koi vehicle nahi mila.</td></tr>'; return; }
+    if (!rows.length) { voTableBody.innerHTML = '<tr><td colspan="6" style="padding:14px;color:var(--muted);">No vehicles found.</td></tr>'; return; }
     voTableBody.innerHTML = rows.map(function(v, i){
       return '<tr class="vo-row" data-idx="' + i + '">' +
         '<td><b>' + esc(v.vehicle) + '</b><span class="vo-chevron">▾</span></td>' +
@@ -525,7 +525,7 @@
   });
 
   function buildVehicleHistoryHTML(v){
-    if (!v.records.length) return '<div style="padding:10px;color:var(--muted);">Koi record nahi.</div>';
+    if (!v.records.length) return '<div style="padding:10px;color:var(--muted);">No records found.</div>';
     var rowsHtml = v.records.map(function(r){
       return '<tr>' +
         '<td>' + esc(r.id) + '</td>' +

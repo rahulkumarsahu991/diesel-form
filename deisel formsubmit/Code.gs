@@ -1,61 +1,61 @@
 /**********************************************************************
  * DIESEL APPROVAL SYSTEM — Google Apps Script Web App (backend)
  *
- * Kaam: 3 stage workflow ka data ek Google Sheet me store/update karta hai.
- *   Stage 1 (Calling Team)  -> create   -> naya request "Pending"
- *   Stage 2 (Manager)       -> approve/reject -> data edit karke approve,
- *                               approve hone par 4-digit OTP generate hota hai
- *   Stage 3 (Diesel Team)   -> verify + dispense -> OTP match hote hi
- *                               "Dispensed" + receipt number generate
+ * What it does: stores/updates the 3-stage workflow's data in a Google Sheet.
+ *   Stage 1 (Calling Team)  -> create   -> new request, "Pending"
+ *   Stage 2 (Manager)       -> approve/reject -> edit data and approve,
+ *                               a 4-digit OTP is generated on approval
+ *   Stage 3 (Diesel Team)   -> verify + dispense -> once the OTP matches,
+ *                               "Dispensed" + a receipt number is generated
  *
- * ===================  SETUP (ek hi baar)  ===========================
- * 1. Google Drive me nayi Google Sheet banao (naam: "Diesel Approval Data").
+ * ===================  SETUP (one time)  ===========================
+ * 1. Create a new Google Sheet in Google Drive (name: "Diesel Approval Data").
  * 2. Menu: Extensions > Apps Script
- * 3. Saara default code hata kar ye poora code paste karo.
+ * 3. Delete all the default code and paste this entire code in.
  * 4. Save (disk icon / Ctrl+S).
  * 5. Deploy > New deployment > gear icon > type: "Web app"
  *      - Description: Diesel approval backend
- *      - Execute as:  Me  (tumhara account)
+ *      - Execute as:  Me  (your account)
  *      - Who has access:  Anyone
- *    "Deploy" dabao, permissions allow karo (Advanced > Go to project > Allow).
- * 6. Jo "/exec" URL milega use copy karo — teeno HTML files (calling-form.html,
- *    manager-approval.html, diesel-dispense.html) me top par
- *    APPS_SCRIPT_URL = "" wali line me paste karo.
+ *    Click "Deploy", allow permissions (Advanced > Go to project > Allow).
+ * 6. Copy the "/exec" URL you get — paste it into the
+ *    APPS_SCRIPT_URL = "" line at the top of all three HTML files
+ *    (calling-form.html, manager-approval.html, diesel-dispense.html).
  *
- * NOTE: Agar baad me is code me change karo to "Deploy > Manage deployments"
- * se SAME deployment ko "Edit" karke naya version deploy karna — warna URL
- * badal jaayega aur HTML files me dubara paste karna padega.
+ * NOTE: If you change this code later, deploy a new version on the SAME
+ * deployment via "Deploy > Manage deployments > Edit" — otherwise the URL
+ * changes and you'll have to paste it into the HTML files again.
  *
- * NOTE (vehicle/pump/route search + driver ID lookup): Ye script alag
- * Google Sheets se bhi data padhta hai (vehicle list, driver details,
- * pump/location list, aur route list). Wo sheets
- * isi Google account se open honi chahiye jisse ye script "Execute as: Me"
- * par deploy hai (ya kam se kam Viewer access ho). Pehli baar deploy/run
- * karte waqt Google ek extra permission popup dega ("See, edit... Google
- * Sheets") — Allow kar dena.
+ * NOTE (vehicle/pump/route search + driver ID lookup): This script also
+ * reads data from separate Google Sheets (vehicle list, driver details,
+ * pump/location list, and route list). Those sheets must be opened by the
+ * same Google account this script is deployed with as "Execute as: Me"
+ * (or at least have Viewer access). The first time you deploy/run it,
+ * Google will show an extra permission popup ("See, edit... Google
+ * Sheets") — click Allow.
  *********************************************************************/
 
 var SHEET_NAME = 'Requests';
 var TIMEZONE = 'Asia/Kolkata';
 
-// Vehicle list ke liye source sheet (Diesel Sheet), tab "fleet s vehical" — Column C
+// Source sheet for the vehicle list (Diesel Sheet), tab "fleet s vehical" — Column C
 var VEHICLE_SHEET_ID = '1EEks9zfIjnYKxARCN6nBTVTxboV19_i32Gg16BzGZdk';
 var VEHICLE_SHEET_NAME = 'fleet s vehical';
 var VEHICLE_COL = 3; // Column C
 
-// Driver ID -> Name/Mobile lookup ke liye source sheet
+// Source sheet for the Driver ID -> Name/Mobile lookup
 var DRIVER_SHEET_ID = '1wLY9CttPw-7FPP58aKLr0Ykf-Ok9uFg5B_kBGuWA-MA';
 var DRIVER_SHEET_NAME = 'Driver Details';
 var DRIVER_ID_COL = 1;     // Column A
 var DRIVER_NAME_COL = 2;   // Column B
 var DRIVER_MOBILE_COL = 3; // Column C
 
-// Pump/Location list ke liye source sheet (same file as vehicle list) — Column A
+// Source sheet for the Pump/Location list (same file as vehicle list) — Column A
 var PUMP_SHEET_ID = VEHICLE_SHEET_ID;
 var PUMP_SHEET_NAME = 'NEW DIESEL&UREA';
 var PUMP_COL = 1; // Column A
 
-// Route/Trip list ke liye source sheet — Column C (From) + Column D (To)
+// Source sheet for the Route/Trip list — Column C (From) + Column D (To)
 var ROUTE_SHEET_ID = '1wgG2K9phHMQPvIskvXF1OBHxNHFk8pegrKCi0hvuF6U';
 var ROUTE_SHEET_NAME = 'Routes';
 var ROUTE_FROM_COL = 3; // Column C
@@ -70,9 +70,9 @@ var HEADERS = [
   'Rate Per Liter', 'Amount'
 ];
 
-// Column numbers (1-indexed) — HEADERS array se match
-// NOTE: Naya field hamesha SABSE AAKHIR me add karna, kabhi beech me insert mat
-// karna — warna saari purani rows ka data galat column se read hone lagega.
+// Column numbers (1-indexed) — matches the HEADERS array
+// NOTE: Always add a new field at the VERY END, never insert one in the
+// middle — otherwise every existing row's data gets read from the wrong column.
 var COL = {
   ID: 1, CREATED_AT: 2, VEHICLE: 3, DRIVER_ID: 4, DRIVER: 5, ROUTE: 6, PUMP: 7,
   REQ_LITERS: 8, REQ_BY: 9, CONTACT: 10, CALL_REMARKS: 11, STATUS: 12,
@@ -93,8 +93,8 @@ function doGet(e) {
     if (action === 'pumps') return jsonOut_(listPumps_());
     if (action === 'routes') return jsonOut_(listRoutes_());
     if (action === 'history') return jsonOut_(vehicleHistory_(p.vehicle, p.limit || 5));
-    // Ek hi round-trip me teeno dropdown lists (Apps Script har call par ~2.5s
-    // leta hai chahe payload chhota ho, isliye calls kam karna hi asli speed hai)
+    // All three dropdown lists in a single round-trip (Apps Script takes ~2.5s
+    // per call regardless of payload size, so fewer calls is the real speed win)
     if (action === 'lists') {
       var v = listVehicles_(), pu = listPumps_(), r = listRoutes_();
       return jsonOut_({
@@ -168,14 +168,14 @@ function rowToObj_(row) {
     receiptNo: row[COL.RECEIPT - 1],
     ratePerLiter: row[COL.RATE_PER_LITER - 1],
     amount: row[COL.AMOUNT - 1]
-    // NOTE: OTP jaan-boojh kar yahan return nahi hota (list/get me) — security
+    // NOTE: OTP is deliberately not returned here (in list/get) — security
   };
 }
 
-// status  — sirf us status ki rows ('' = sab)
-// by      — sirf us "Requested By" naam ki rows ('' = sab)
-// limit   — max kitni rows bhejni ('' = sab). Filtering server par hoti hai
-//           taaki bade data me poori sheet download na karni pade.
+// status  — only rows with this status ('' = all)
+// by      — only rows with this "Requested By" name ('' = all)
+// limit   — max rows to send back ('' = all). Filtering happens on the
+//           server so the whole sheet doesn't need to be downloaded for large data.
 function listRequests_(status, by, limit) {
   var sheet = getSheet_();
   var lastRow = sheet.getLastRow();
@@ -195,10 +195,10 @@ function listRequests_(status, by, limit) {
   return { ok: true, rows: rows };
 }
 
-// Ek vehicle ki last N dispensed entries — calling form ki refuel history ke liye.
-// Poori list download karne ke bajaye server par hi filter/trim ho jaata hai.
+// Last N dispensed entries for a vehicle — for the calling form's refuel history.
+// Filtered/trimmed on the server instead of downloading the whole list.
 function vehicleHistory_(vehicle, limit) {
-  if (!vehicle) return { ok: false, error: 'Vehicle No do' };
+  if (!vehicle) return { ok: false, error: 'Provide a Vehicle No' };
   var sheet = getSheet_();
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { ok: true, rows: [] };
@@ -220,15 +220,15 @@ function vehicleHistory_(vehicle, limit) {
       amount: r[COL.AMOUNT - 1]
     });
   }
-  // Row order != dispense order (ek purani request baad me bhi dispense ho sakti
-  // hai), isliye actual dispense time par sort karke hi latest N nikalte hain.
+  // Row order != dispense order (an older request can still be dispensed later),
+  // so we sort by actual dispense time before taking the latest N.
   rows.sort(function(a, b){ return new Date(b.dispensedAt) - new Date(a.dispensedAt); });
   return { ok: true, rows: rows.slice(0, max) };
 }
 
 function getRequest_(id) {
   var found = findRow_(id);
-  if (!found) return { ok: false, error: 'Request ID nahi mila' };
+  if (!found) return { ok: false, error: 'Request ID not found' };
   return { ok: true, row: rowToObj_(found.values) };
 }
 
@@ -283,14 +283,14 @@ function approveRequest_(body) {
   lock.waitLock(20000);
   try {
     var found = findRow_(body.id);
-    if (!found) return { ok: false, error: 'Request ID nahi mila' };
+    if (!found) return { ok: false, error: 'Request ID not found' };
     if (found.values[COL.STATUS - 1] !== 'Pending') {
-      return { ok: false, error: 'Ye request pehle hi "' + found.values[COL.STATUS - 1] + '" ho chuki hai' };
+      return { ok: false, error: 'This request is already "' + found.values[COL.STATUS - 1] + '"' };
     }
     var sheet = getSheet_();
     var otp = String(Math.floor(1000 + Math.random() * 9000));
 
-    // Manager edit karke overwrite kar sakta hai (vehicle/driver/route/pump/liters)
+    // The Manager can edit and overwrite these (vehicle/driver/route/pump/liters)
     if (body.vehicleNo) sheet.getRange(found.rowIndex, COL.VEHICLE).setValue(body.vehicleNo);
     if (body.driverId) sheet.getRange(found.rowIndex, COL.DRIVER_ID).setValue(body.driverId);
     if (body.driverName) sheet.getRange(found.rowIndex, COL.DRIVER).setValue(body.driverName);
@@ -315,9 +315,9 @@ function rejectRequest_(body) {
   lock.waitLock(20000);
   try {
     var found = findRow_(body.id);
-    if (!found) return { ok: false, error: 'Request ID nahi mila' };
+    if (!found) return { ok: false, error: 'Request ID not found' };
     if (found.values[COL.STATUS - 1] !== 'Pending') {
-      return { ok: false, error: 'Ye request pehle hi "' + found.values[COL.STATUS - 1] + '" ho chuki hai' };
+      return { ok: false, error: 'This request is already "' + found.values[COL.STATUS - 1] + '"' };
     }
     var sheet = getSheet_();
     sheet.getRange(found.rowIndex, COL.STATUS).setValue('Rejected');
@@ -330,16 +330,16 @@ function rejectRequest_(body) {
   }
 }
 
-// NOTE: OTP check jaan-boojh kar hata diya gaya hai (user request) — ab sirf
-// status "Approved" hona kaafi hai dispense karne ke liye, OTP verify nahi hota.
+// NOTE: The OTP check was deliberately removed (per user request) — now just
+// having status "Approved" is enough to dispense; OTP is no longer verified.
 function checkApproved_(id) {
   var found = findRow_(id);
-  if (!found) return { ok: false, error: 'Request ID nahi mila' };
+  if (!found) return { ok: false, error: 'Request ID not found' };
   if (found.values[COL.STATUS - 1] === 'Dispensed') {
-    return { ok: false, error: 'Ye diesel pehle hi dispense ho chuka hai' };
+    return { ok: false, error: 'This diesel has already been dispensed' };
   }
   if (found.values[COL.STATUS - 1] !== 'Approved') {
-    return { ok: false, error: 'Ye request abhi tak manager se "Approved" nahi hai (status: ' + found.values[COL.STATUS - 1] + ')' };
+    return { ok: false, error: 'This request has not been "Approved" by the manager yet (status: ' + found.values[COL.STATUS - 1] + ')' };
   }
   return { ok: true, row: rowToObj_(found.values) };
 }
@@ -355,9 +355,9 @@ function dispenseRequest_(body) {
     var sheet = getSheet_();
     var receiptNo = 'RCPT-' + Utilities.formatDate(new Date(), TIMEZONE, 'yyMMdd-HHmmss');
 
-    // Actual liters = Approved Liters (manager-fixed quantity) — diesel team ab sirf
-    // rate/liter daalta hai, liters dobara type nahi karta. Amount server par
-    // calculate hota hai (client-trust nahi karte) taaki tampering na ho sake.
+    // Actual liters = Approved Liters (manager-fixed quantity) — the diesel team
+    // only enters rate/liter now, not the liters again. Amount is calculated on
+    // the server (not trusting the client) to prevent tampering.
     var actualLiters = Number(check.row.approvedLiters) || 0;
     var ratePerLiter = Number(body.ratePerLiter) || 0;
     var amount = Math.round(ratePerLiter * actualLiters * 100) / 100;
@@ -388,7 +388,7 @@ function listVehicles_() {
   var sheet = findSheetLoose_(ss, VEHICLE_SHEET_NAME);
   if (!sheet) {
     var names = ss.getSheets().map(function(s){ return s.getName(); });
-    return { ok: false, error: '"' + VEHICLE_SHEET_NAME + '" tab nahi mila. Is sheet ke tabs: ' + names.join(', ') };
+    return { ok: false, error: '"' + VEHICLE_SHEET_NAME + '" tab not found. This sheet\'s tabs: ' + names.join(', ') };
   }
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { ok: true, vehicles: [] };
@@ -415,7 +415,7 @@ function listPumps_() {
   var sheet = findSheetLoose_(ss, PUMP_SHEET_NAME);
   if (!sheet) {
     var names = ss.getSheets().map(function(s){ return s.getName(); });
-    return { ok: false, error: '"' + PUMP_SHEET_NAME + '" tab nahi mila. Is sheet ke tabs: ' + names.join(', ') };
+    return { ok: false, error: '"' + PUMP_SHEET_NAME + '" tab not found. This sheet\'s tabs: ' + names.join(', ') };
   }
 
   var lastRow = sheet.getLastRow();
@@ -443,7 +443,7 @@ function listRoutes_() {
   var sheet = findSheetLoose_(ss, ROUTE_SHEET_NAME);
   if (!sheet) {
     var names = ss.getSheets().map(function(s){ return s.getName(); });
-    return { ok: false, error: '"' + ROUTE_SHEET_NAME + '" tab nahi mila. Is sheet ke tabs: ' + names.join(', ') };
+    return { ok: false, error: '"' + ROUTE_SHEET_NAME + '" tab not found. This sheet\'s tabs: ' + names.join(', ') };
   }
 
   var lastRow = sheet.getLastRow();
@@ -467,14 +467,14 @@ function listRoutes_() {
 }
 
 function lookupDriver_(id) {
-  if (!id) return { ok: false, error: 'Driver ID do' };
+  if (!id) return { ok: false, error: 'Provide a Driver ID' };
 
   var ss = SpreadsheetApp.openById(DRIVER_SHEET_ID);
   var sheet = ss.getSheetByName(DRIVER_SHEET_NAME);
-  if (!sheet) return { ok: false, error: '"' + DRIVER_SHEET_NAME + '" tab nahi mila' };
+  if (!sheet) return { ok: false, error: '"' + DRIVER_SHEET_NAME + '" tab not found' };
 
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { ok: false, error: 'Driver ID nahi mila' };
+  if (lastRow < 2) return { ok: false, error: 'Driver ID not found' };
 
   var data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
   var target = String(id).trim().toLowerCase();
@@ -489,10 +489,10 @@ function lookupDriver_(id) {
       };
     }
   }
-  return { ok: false, error: 'Driver ID nahi mila' };
+  return { ok: false, error: 'Driver ID not found' };
 }
 
-// Exact match try karta hai, fir case/extra-space ignore karke loose match
+// Tries an exact match first, then a loose match ignoring case/extra spaces
 function findSheetLoose_(ss, name) {
   var exact = ss.getSheetByName(name);
   if (exact) return exact;
@@ -519,30 +519,30 @@ function fillEmpty_(row) {
 }
 
 /**********************************************************************
- * SAARA DATA CLEAR KARNE KE LIYE (sirf manual use)
+ * TO CLEAR ALL DATA (manual use only)
  *
- * Ye function jaan-boojh kar doGet/doPost me expose NAHI kiya gaya —
- * matlab isse koi bahar se (URL se) trigger nahi kar sakta. Sirf Apps
- * Script editor se hi chalega.
+ * This function is deliberately NOT exposed in doGet/doPost — meaning
+ * nothing outside (via URL) can trigger it. Runs only from the Apps
+ * Script editor.
  *
- * KAISE CHALAYE:
- *   1. Apps Script editor kholo
- *   2. Upar function dropdown me "resetAllRequests" chuno
- *   3. "Run" (▶) dabao
- *   4. Execution log me "X test rows delete ho gayi" dikhega
+ * HOW TO RUN:
+ *   1. Open the Apps Script editor
+ *   2. Select "resetAllRequests" from the function dropdown at the top
+ *   3. Click "Run" (▶)
+ *   4. The execution log will show "Deleted X test rows"
  *
- * Isse "Requests" tab ki SAARI rows delete ho jaayengi (header safe
- * rahega) aur agli request dobara DSL001 se shuru hogi.
- * DHYAN DO: ye wapas nahi ho sakta — chalane se pehle confirm kar lo.
+ * This deletes ALL rows in the "Requests" tab (the header stays safe)
+ * and the next request will start again from DSL001.
+ * WARNING: this cannot be undone — confirm before running.
  *********************************************************************/
 function resetAllRequests() {
   var sheet = getSheet_();
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) {
-    Logger.log('Sheet pehle se khali hai — kuch delete nahi kiya.');
+    Logger.log('Sheet is already empty — nothing to delete.');
     return;
   }
   var count = lastRow - 1;
   sheet.deleteRows(2, count);
-  Logger.log(count + ' test rows delete ho gayi. Agli request DSL001 se shuru hogi.');
+  Logger.log('Deleted ' + count + ' test rows. The next request will start from DSL001.');
 }
