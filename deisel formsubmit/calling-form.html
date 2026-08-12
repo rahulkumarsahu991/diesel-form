@@ -141,13 +141,16 @@
   .status-Dispensed{background:#dbeafe;color:#1d4ed8;}
 
   .req-item{background:rgba(255,255,255,.85);border:1px solid var(--glass-border);border-radius:12px;margin-top:8px;overflow:hidden;
-    box-shadow:0 4px 14px rgba(16,19,46,.12);backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%);}
-  .req-item-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:11px 13px;cursor:pointer;}
+    box-shadow:0 4px 14px rgba(16,19,46,.12);backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%);
+    transition:border-color .2s,box-shadow .2s;}
+  .req-item.open{border-color:rgba(242,137,26,.5);box-shadow:0 6px 18px rgba(16,19,46,.16);}
+  .req-item-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:11px 13px;cursor:pointer;transition:background .15s;}
   .req-item-head:active{background:rgba(242,137,26,.1);}
-  .req-item .chevron{font-size:10px;color:var(--muted);transition:transform .15s;}
+  .req-item .chevron{font-size:10px;color:var(--muted);transition:transform .2s;}
   .req-item.open .chevron{transform:rotate(180deg);}
-  .req-item-body{display:none;padding:2px 13px 10px;}
-  .req-item.open .req-item-body{display:block;}
+  .req-item-body{max-height:0;opacity:0;overflow:hidden;padding:0 13px;
+    transition:max-height .3s cubic-bezier(.4,0,.2,1),opacity .22s ease,padding .3s ease;}
+  .req-item.open .req-item-body{max-height:700px;opacity:1;padding:2px 13px 10px;}
   .req-item-body .r{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:5px 0;border-bottom:1px dashed var(--border);}
   .req-item-body .r:last-child{border-bottom:none;}
   .req-item-body .r span:first-child{color:var(--muted);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
@@ -731,7 +734,11 @@
         '<span class="status-chip status-' + r.status + '">' + esc(r.status) + '</span>' +
         '<span class="chevron">▾</span>' +
       '</div>';
-    head.addEventListener('click', function(){ item.classList.toggle('open'); });
+    head.addEventListener('click', function(){
+      var wasOpen = item.classList.contains('open');
+      myReqList.querySelectorAll('.req-item.open').forEach(function(el){ el.classList.remove('open'); });
+      if (!wasOpen) item.classList.add('open');
+    });
     item.appendChild(head);
 
     var body = document.createElement('div');

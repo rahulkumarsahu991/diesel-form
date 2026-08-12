@@ -92,17 +92,19 @@
   }
   .req-card{background:var(--glass-bg);border:1px solid var(--glass-border);border-left:4px solid var(--accent,var(--green));border-radius:14px;
     margin-top:10px;overflow:hidden;box-shadow:0 4px 16px rgba(16,19,46,.15);
-    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);}
-  .req-card-head{padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);transition:box-shadow .2s;}
+  .req-card.open{box-shadow:0 6px 20px rgba(16,19,46,.2);}
+  .req-card-head{padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;transition:background .15s;}
   .req-card-head:active{background:rgba(22,163,74,.12);}
   .req-card .rc-id{font-weight:800;color:var(--navy);font-size:14px;}
   .req-card .rc-meta{font-size:12px;color:var(--muted);margin-top:3px;}
   .rc-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
   .req-card .rc-liters{font-weight:700;color:var(--green-dark);white-space:nowrap;}
-  .req-card .rc-chevron{font-size:11px;color:var(--muted);transition:transform .15s;}
+  .req-card .rc-chevron{font-size:11px;color:var(--muted);transition:transform .2s;}
   .req-card.open .rc-chevron{transform:rotate(180deg);}
-  .req-card-body{display:none;padding:2px 16px 12px;}
-  .req-card.open .req-card-body{display:block;}
+  .req-card-body{max-height:0;opacity:0;overflow:hidden;padding:0 16px;
+    transition:max-height .3s cubic-bezier(.4,0,.2,1),opacity .22s ease,padding .3s ease;}
+  .req-card.open .req-card-body{max-height:700px;opacity:1;padding:2px 16px 12px;}
   .req-card-body .r{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:5px 0;border-bottom:1px dashed var(--border);}
   .req-card-body .r:last-child{border-bottom:none;}
   .req-card-body .r span:first-child{color:var(--muted);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
@@ -530,7 +532,11 @@
         '<div class="rc-meta">By: ' + esc(r.requestedBy || '-') + ' • ' + fmtDate(r.createdAt) + '</div>' +
       '</div>' +
       '<div class="rc-right"><span class="rc-liters">' + esc(liters) + ' L</span><span class="rc-chevron">▾</span></div>';
-    head.addEventListener('click', function(){ card.classList.toggle('open'); });
+    head.addEventListener('click', function(){
+      var wasOpen = card.classList.contains('open');
+      approvedList.querySelectorAll('.req-card.open').forEach(function(el){ el.classList.remove('open'); });
+      if (!wasOpen) card.classList.add('open');
+    });
     card.appendChild(head);
 
     var body = document.createElement('div');
