@@ -78,28 +78,56 @@
   .status-Dispensed{background:#dbeafe;color:#1d4ed8;}
   .ov-empty,.ov-loading{padding:30px;text-align:center;color:var(--muted);}
 
+  .vo-panel{max-width:900px;margin:20px auto 0;}
+  .vo-toggle{width:100%;text-align:left;padding:14px 18px;border-radius:16px;border:1px solid var(--glass-border);
+    background:var(--glass-bg);color:var(--ink);font-size:14px;font-weight:700;cursor:pointer;
+    box-shadow:0 8px 32px rgba(16,19,46,.2);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
+    display:flex;justify-content:space-between;align-items:center;}
+  .vo-toggle .chevron{font-size:12px;color:var(--muted);transition:transform .2s;flex-shrink:0;margin-left:10px;}
+  .vo-toggle.open .chevron{transform:rotate(180deg);}
+  .vo-body{display:none;margin-top:10px;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:16px;padding:14px;
+    box-shadow:0 8px 32px rgba(16,19,46,.2);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);}
+  .vo-body.show{display:block;}
+  .vo-table-wrap{overflow-x:auto;margin-top:10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.85);}
+  .vo-table-wrap table{width:100%;border-collapse:collapse;font-size:13px;min-width:520px;}
+  .vo-table-wrap th{text-align:left;padding:9px 10px;background:rgba(248,249,251,.7);color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  .vo-table-wrap td{padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap;font-weight:600;color:var(--ink);}
+  .vo-table-wrap tr:last-child td{border-bottom:none;}
+  .vo-row{cursor:pointer;}
+  .vo-row:active{background:rgba(242,137,26,.12);}
+  .vo-row .vo-chevron{font-size:10px;color:var(--muted);margin-left:6px;display:inline-block;transition:transform .15s;}
+  .vo-row.open .vo-chevron{transform:rotate(180deg);}
+  .vo-detail-row td{padding:0;background:rgba(27,31,79,.04);}
+  .vo-history-wrap{overflow-x:auto;padding:8px;}
+  .vo-history-table{width:100%;border-collapse:collapse;font-size:12px;min-width:640px;}
+  .vo-history-table th{text-align:left;padding:7px 9px;background:rgba(27,31,79,.06);color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  .vo-history-table td{padding:7px 9px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  .vo-history-table tr:last-child td{border-bottom:none;}
+
   /* ---------- Mobile: stack the table into cards instead of side-scrolling ----------
      A 12-column table is hard to read on a small screen, so each row
      becomes a card with its column heading (data-label) next to each value. */
   @media (max-width:640px){
     .table-wrap{background:transparent;border:none;box-shadow:none;overflow-x:visible;
       backdrop-filter:none;-webkit-backdrop-filter:none;}
-    table{min-width:0;font-size:13px;}
-    thead{display:none;}
-    tbody,tr,td{display:block;width:100%;}
-    tr{background:rgba(255,255,255,.85);border:1px solid var(--glass-border);border-radius:14px;
+    .table-wrap table{min-width:0;font-size:13px;}
+    .table-wrap thead{display:none;}
+    .table-wrap tbody,.table-wrap tr,.table-wrap td{display:block;width:100%;}
+    .table-wrap tr{background:rgba(255,255,255,.85);border:1px solid var(--glass-border);border-radius:14px;
       margin-bottom:10px;padding:10px 12px;box-shadow:0 4px 16px rgba(16,19,46,.18);
       backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%);}
-    td{border-bottom:1px dashed var(--border);padding:6px 0;white-space:normal;
+    .table-wrap td{border-bottom:1px dashed var(--border);padding:6px 0;white-space:normal;
       display:flex;justify-content:space-between;gap:12px;align-items:baseline;
       font-weight:600;color:var(--ink);font-size:12.5px;}
-    td:last-child{border-bottom:none;}
-    td::before{content:attr(data-label);color:var(--muted);font-size:10.5px;font-weight:600;
+    .table-wrap td:last-child{border-bottom:none;}
+    .table-wrap td::before{content:attr(data-label);color:var(--muted);font-size:10.5px;font-weight:600;
       text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
-    td.ov-empty,td.ov-loading{display:block;text-align:center;}
-    td.ov-empty::before,td.ov-loading::before{content:none;}
+    .table-wrap td.ov-empty,.table-wrap td.ov-loading{display:block;text-align:center;}
+    .table-wrap td.ov-empty::before,.table-wrap td.ov-loading::before{content:none;}
     /* Touch targets 44px (Apple/Google minimum recommendation) */
     .ov-toolbar button{padding:11px 16px;font-size:14px;min-height:44px;}
+    .vo-toggle{padding:14px 16px;min-height:48px;}
+    .vo-toggle span:first-child{font-size:13px;}
   }
 
   /* ---------- Login gate ---------- */
@@ -211,6 +239,24 @@
         <tbody id="ovBody"><tr><td colspan="12" class="ov-loading">Loading...</td></tr></tbody>
       </table>
     </div>
+
+    <div class="vo-panel">
+      <button class="vo-toggle" id="voToggle">
+        <span>🚚 Vehicle-wise Overview — OTP count, last diesel dispensed</span>
+        <span class="chevron" id="voChevron">▾</span>
+      </button>
+      <div class="vo-body" id="voBody">
+        <input type="text" id="voSearch" placeholder="Search by vehicle number...">
+        <div class="vo-table-wrap">
+          <table>
+            <thead>
+              <tr><th>Vehicle</th><th>Total Req.</th><th>OTP Count</th><th>Last Liters</th><th>Last Date</th><th>Last By</th></tr>
+            </thead>
+            <tbody id="voTableBody"><tr><td colspan="6" style="padding:14px;color:var(--muted);">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
 <script>
@@ -274,6 +320,8 @@
         allRequests = res.rows;
         renderStats();
         renderTable();
+        vehicleStats = aggregateVehicles(allRequests);
+        renderVehicleOverview();
       })
       .catch(function(err){
         ovBody.innerHTML = '<tr><td colspan="12" class="ov-empty">Network error: ' + esc(err.message) + '</td></tr>';
@@ -320,6 +368,116 @@
         '<td data-label="Dispensed By">' + esc(r.dispensedBy || '-') + '</td>' +
       '</tr>';
     }).join('');
+  }
+
+  /* ---------- Vehicle-wise Overview (OTP count / last dispensed) ---------- */
+  var voToggle = document.getElementById('voToggle');
+  var voChevron = document.getElementById('voChevron');
+  var voBody = document.getElementById('voBody');
+  var voTableBody = document.getElementById('voTableBody');
+  var voSearch = document.getElementById('voSearch');
+  var vehicleStats = null;
+
+  voToggle.addEventListener('click', function(){
+    var open = voBody.classList.toggle('show');
+    voToggle.classList.toggle('open', open);
+    voChevron.textContent = open ? '▴' : '▾';
+  });
+  voSearch.addEventListener('input', function(){ renderVehicleOverview(); });
+
+  function aggregateVehicles(rows){
+    var map = {};
+    rows.forEach(function(r){
+      var v = r.vehicleNo || '(unknown)';
+      if (!map[v]) map[v] = { vehicle: v, total: 0, otpCount: 0, lastLiters: null, lastDate: null, lastDateObj: null, lastBy: null, records: [] };
+      map[v].total++;
+      map[v].records.push(r);
+      if (r.status === 'Approved' || r.status === 'Dispensed') map[v].otpCount++;
+      if (r.status === 'Dispensed' && r.dispensedAt) {
+        var d = new Date(r.dispensedAt);
+        if (!map[v].lastDateObj || d > map[v].lastDateObj) {
+          map[v].lastDateObj = d;
+          map[v].lastDate = fmtDate(r.dispensedAt);
+          map[v].lastLiters = r.actualLiters;
+          map[v].lastBy = r.dispensedBy;
+        }
+      }
+    });
+    var list = [];
+    for (var k in map) {
+      map[k].records.sort(function(a, b){ return new Date(b.createdAt) - new Date(a.createdAt); });
+      list.push(map[k]);
+    }
+    list.sort(function(a, b){
+      var at = a.lastDateObj ? a.lastDateObj.getTime() : 0;
+      var bt = b.lastDateObj ? b.lastDateObj.getTime() : 0;
+      return bt - at;
+    });
+    return list;
+  }
+
+  var voVisibleRows = [];
+
+  function renderVehicleOverview(){
+    if (!vehicleStats) { voTableBody.innerHTML = '<tr><td colspan="6" style="padding:14px;color:var(--muted);">Loading...</td></tr>'; return; }
+    var q = voSearch.value.trim().toUpperCase();
+    var rows = q ? vehicleStats.filter(function(v){ return v.vehicle.toUpperCase().indexOf(q) !== -1; }) : vehicleStats;
+    voVisibleRows = rows;
+    if (!rows.length) { voTableBody.innerHTML = '<tr><td colspan="6" style="padding:14px;color:var(--muted);">No vehicles found.</td></tr>'; return; }
+    voTableBody.innerHTML = rows.map(function(v, i){
+      return '<tr class="vo-row" data-idx="' + i + '">' +
+        '<td><b>' + esc(v.vehicle) + '</b><span class="vo-chevron">▾</span></td>' +
+        '<td>' + v.total + '</td>' +
+        '<td>' + v.otpCount + '</td>' +
+        '<td>' + esc(v.lastLiters || '-') + '</td>' +
+        '<td>' + esc(v.lastDate || '-') + '</td>' +
+        '<td>' + esc(v.lastBy || '-') + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  voTableBody.addEventListener('click', function(e){
+    var tr = e.target.closest('tr.vo-row');
+    if (!tr) return;
+    var next = tr.nextElementSibling;
+    if (next && next.classList.contains('vo-detail-row')) {
+      next.remove();
+      tr.classList.remove('open');
+      return;
+    }
+    document.querySelectorAll('.vo-detail-row').forEach(function(d){ d.remove(); });
+    document.querySelectorAll('.vo-row.open').forEach(function(r){ r.classList.remove('open'); });
+
+    var idx = Number(tr.getAttribute('data-idx'));
+    var vehicle = voVisibleRows[idx];
+    tr.classList.add('open');
+    var detailTr = document.createElement('tr');
+    detailTr.className = 'vo-detail-row';
+    var td = document.createElement('td');
+    td.colSpan = 6;
+    td.innerHTML = buildVehicleHistoryHTML(vehicle);
+    detailTr.appendChild(td);
+    tr.parentNode.insertBefore(detailTr, tr.nextSibling);
+  });
+
+  function buildVehicleHistoryHTML(v){
+    if (!v.records.length) return '<div style="padding:10px;color:var(--muted);">No records found.</div>';
+    var rowsHtml = v.records.map(function(r){
+      return '<tr>' +
+        '<td>' + esc(r.id) + '</td>' +
+        '<td>' + fmtDate(r.createdAt) + '</td>' +
+        '<td><span class="status-chip status-' + r.status + '">' + esc(r.status) + '</span></td>' +
+        '<td>' + esc(r.requestedLiters) + '</td>' +
+        '<td>' + esc(r.approvedLiters || '-') + '</td>' +
+        '<td>' + esc(r.actualLiters || '-') + '</td>' +
+        '<td>' + esc(r.driverName || '-') + '</td>' +
+        '<td>' + esc(r.managerName || '-') + '</td>' +
+        '<td>' + esc(r.dispensedBy || '-') + '</td>' +
+      '</tr>';
+    }).join('');
+    return '<div class="vo-history-wrap"><table class="vo-history-table">' +
+      '<thead><tr><th>Req ID</th><th>Date</th><th>Status</th><th>Req.L</th><th>Appr.L</th><th>Actual L</th><th>Driver</th><th>Manager</th><th>Dispensed By</th></tr></thead>' +
+      '<tbody>' + rowsHtml + '</tbody></table></div>';
   }
 
   function fmtDate(d){ if (!d) return ''; try { return new Date(d).toLocaleString('en-IN'); } catch(e){ return d; } }
