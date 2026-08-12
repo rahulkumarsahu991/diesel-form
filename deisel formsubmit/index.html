@@ -82,17 +82,24 @@
   .vo-title{font-size:15px;font-weight:800;color:#fff;margin-bottom:10px;text-shadow:0 1px 3px rgba(0,0,0,.4);}
   .vo-body{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:16px;padding:14px;
     box-shadow:0 8px 32px rgba(16,19,46,.2);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);}
-  .vo-table-wrap{overflow-x:auto;margin-top:10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.85);}
-  .vo-table-wrap table{width:100%;border-collapse:collapse;font-size:13px;min-width:520px;}
-  .vo-table-wrap th{text-align:left;padding:9px 10px;background:rgba(248,249,251,.7);color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);white-space:nowrap;}
-  .vo-table-wrap td{padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap;font-weight:600;color:var(--ink);}
-  .vo-table-wrap tr:last-child td{border-bottom:none;}
-  .vo-row{cursor:pointer;}
-  .vo-row:active{background:rgba(242,137,26,.12);}
-  .vo-row .vo-chevron{font-size:10px;color:var(--muted);margin-left:6px;display:inline-block;transition:transform .15s;}
-  .vo-row.open .vo-chevron{transform:rotate(180deg);}
-  .vo-detail-row td{padding:0;background:rgba(27,31,79,.04);}
-  .vo-history-wrap{overflow-x:auto;padding:8px;}
+  .vo-search-wrap{position:relative;}
+  .vo-search-wrap::before{content:'🔍';position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none;opacity:.65;}
+  .vo-search-wrap input{padding-left:36px;}
+  .vo-results{margin-top:4px;}
+  .vo-hint{padding:16px 4px;color:var(--muted);font-size:13px;text-align:center;}
+  .vo-card{background:rgba(255,255,255,.85);border:1px solid var(--glass-border);border-radius:12px;margin-top:10px;overflow:hidden;
+    cursor:pointer;box-shadow:0 4px 14px rgba(16,19,46,.12);backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%);
+    transition:border-color .2s,box-shadow .2s;}
+  .vo-card.open{border-color:rgba(242,137,26,.5);box-shadow:0 6px 18px rgba(16,19,46,.16);}
+  .vo-card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;}
+  .vo-card-head .vname{font-weight:800;color:var(--navy);font-size:14px;}
+  .vo-card-head .vmeta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--muted);margin-top:3px;}
+  .vo-card-head .vmeta b{color:var(--ink);font-weight:700;}
+  .vo-card .chevron{font-size:11px;color:var(--muted);transition:transform .2s;flex-shrink:0;}
+  .vo-card.open .chevron{transform:rotate(180deg);}
+  .vo-card-body{max-height:0;opacity:0;overflow:hidden;transition:max-height .3s cubic-bezier(.4,0,.2,1),opacity .22s ease;}
+  .vo-card.open .vo-card-body{max-height:900px;opacity:1;}
+  .vo-history-wrap{overflow-x:auto;padding:0 8px 8px;}
   .vo-history-table{width:100%;border-collapse:collapse;font-size:12px;min-width:640px;}
   .vo-history-table th{text-align:left;padding:7px 9px;background:rgba(27,31,79,.06);color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);white-space:nowrap;}
   .vo-history-table td{padding:7px 9px;border-bottom:1px solid var(--border);white-space:nowrap;}
@@ -228,15 +235,10 @@
     <div class="vo-panel">
       <div class="vo-title">🚚 Vehicle-wise Overview — OTP count, last diesel dispensed</div>
       <div class="vo-body" id="voBody">
-        <input type="text" id="voSearch" placeholder="Search by vehicle number...">
-        <div class="vo-table-wrap">
-          <table>
-            <thead>
-              <tr><th>Vehicle</th><th>Total Req.</th><th>OTP Count</th><th>Last Liters</th><th>Last Date</th><th>Last By</th></tr>
-            </thead>
-            <tbody id="voTableBody"><tr><td colspan="6" style="padding:14px;color:var(--muted);">Loading...</td></tr></tbody>
-          </table>
+        <div class="vo-search-wrap">
+          <input type="text" id="voSearch" placeholder="Search by vehicle number...">
         </div>
+        <div id="voResults" class="vo-results"><div class="vo-hint">Type a vehicle number to search.</div></div>
       </div>
     </div>
 
@@ -376,7 +378,7 @@
 
   /* ---------- Vehicle-wise Overview (OTP count / last dispensed) ---------- */
   var voBody = document.getElementById('voBody');
-  var voTableBody = document.getElementById('voTableBody');
+  var voResults = document.getElementById('voResults');
   var voSearch = document.getElementById('voSearch');
   var vehicleStats = null;
 
@@ -413,49 +415,43 @@
     return list;
   }
 
-  var voVisibleRows = [];
-
   function renderVehicleOverview(){
-    if (!vehicleStats) { voTableBody.innerHTML = '<tr><td colspan="6" style="padding:14px;color:var(--muted);">Loading...</td></tr>'; return; }
     var q = voSearch.value.trim().toUpperCase();
-    var rows = q ? vehicleStats.filter(function(v){ return v.vehicle.toUpperCase().indexOf(q) !== -1; }) : vehicleStats;
-    voVisibleRows = rows;
-    if (!rows.length) { voTableBody.innerHTML = '<tr><td colspan="6" style="padding:14px;color:var(--muted);">No vehicles found.</td></tr>'; return; }
-    voTableBody.innerHTML = rows.map(function(v, i){
-      return '<tr class="vo-row" data-idx="' + i + '">' +
-        '<td><b>' + esc(v.vehicle) + '</b><span class="vo-chevron">▾</span></td>' +
-        '<td>' + v.total + '</td>' +
-        '<td>' + v.otpCount + '</td>' +
-        '<td>' + esc(v.lastLiters || '-') + '</td>' +
-        '<td>' + esc(v.lastDate || '-') + '</td>' +
-        '<td>' + esc(v.lastBy || '-') + '</td>' +
-      '</tr>';
-    }).join('');
+    if (!q) { voResults.innerHTML = '<div class="vo-hint">Type a vehicle number to search.</div>'; return; }
+    if (!vehicleStats) { voResults.innerHTML = '<div class="vo-hint">Loading...</div>'; return; }
+    var rows = vehicleStats.filter(function(v){ return v.vehicle.toUpperCase().indexOf(q) !== -1; });
+    if (!rows.length) { voResults.innerHTML = '<div class="vo-hint">No vehicles found.</div>'; return; }
+    voResults.innerHTML = '';
+    rows.forEach(function(v){ voResults.appendChild(buildVoCard(v)); });
   }
 
-  voTableBody.addEventListener('click', function(e){
-    var tr = e.target.closest('tr.vo-row');
-    if (!tr) return;
-    var next = tr.nextElementSibling;
-    if (next && next.classList.contains('vo-detail-row')) {
-      next.remove();
-      tr.classList.remove('open');
-      return;
-    }
-    document.querySelectorAll('.vo-detail-row').forEach(function(d){ d.remove(); });
-    document.querySelectorAll('.vo-row.open').forEach(function(r){ r.classList.remove('open'); });
+  function buildVoCard(v){
+    var card = document.createElement('div');
+    card.className = 'vo-card';
 
-    var idx = Number(tr.getAttribute('data-idx'));
-    var vehicle = voVisibleRows[idx];
-    tr.classList.add('open');
-    var detailTr = document.createElement('tr');
-    detailTr.className = 'vo-detail-row';
-    var td = document.createElement('td');
-    td.colSpan = 6;
-    td.innerHTML = buildVehicleHistoryHTML(vehicle);
-    detailTr.appendChild(td);
-    tr.parentNode.insertBefore(detailTr, tr.nextSibling);
-  });
+    var head = document.createElement('div');
+    head.className = 'vo-card-head';
+    head.innerHTML =
+      '<div>' +
+        '<div class="vname">' + esc(v.vehicle) + '</div>' +
+        '<div class="vmeta"><span><b>' + v.total + '</b> req</span><span><b>' + v.otpCount + '</b> OTP</span>' +
+          '<span>Last: <b>' + esc(v.lastLiters || '-') + ' L</b> on ' + esc(v.lastDate || '-') + (v.lastBy ? ' by <b>' + esc(v.lastBy) + '</b>' : '') + '</span></div>' +
+      '</div>' +
+      '<span class="chevron">▾</span>';
+    head.addEventListener('click', function(){
+      var wasOpen = card.classList.contains('open');
+      voResults.querySelectorAll('.vo-card.open').forEach(function(el){ el.classList.remove('open'); });
+      if (!wasOpen) card.classList.add('open');
+    });
+    card.appendChild(head);
+
+    var body = document.createElement('div');
+    body.className = 'vo-card-body';
+    body.innerHTML = buildVehicleHistoryHTML(v);
+    card.appendChild(body);
+
+    return card;
+  }
 
   function buildVehicleHistoryHTML(v){
     if (!v.records.length) return '<div style="padding:10px;color:var(--muted);">No records found.</div>';
