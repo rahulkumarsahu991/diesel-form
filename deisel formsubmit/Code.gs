@@ -38,6 +38,11 @@
 var SHEET_NAME = 'Requests';
 var TIMEZONE = 'Asia/Kolkata';
 
+// Gate for the "Clear All Data" button on index.html (Director/Developer view only).
+// Same password as that page's login — this is just a re-confirmation click-guard,
+// not a separate secret to manage.
+var ADMIN_RESET_PASSWORD = 'Daman@11';
+
 // Source sheet for the vehicle list (Diesel Sheet), tab "fleet s vehical" — Column C
 var VEHICLE_SHEET_ID = '1EEks9zfIjnYKxARCN6nBTVTxboV19_i32Gg16BzGZdk';
 var VEHICLE_SHEET_NAME = 'fleet s vehical';
@@ -118,6 +123,7 @@ function doPost(e) {
     if (action === 'approve') return jsonOut_(approveRequest_(body));
     if (action === 'reject') return jsonOut_(rejectRequest_(body));
     if (action === 'dispense') return jsonOut_(dispenseRequest_(body));
+    if (action === 'clearAllData') return jsonOut_(clearAllData_(body));
     return jsonOut_({ ok: false, error: 'Unknown action' });
   } catch (err) {
     return jsonOut_({ ok: false, error: err.message });
@@ -545,4 +551,28 @@ function resetAllRequests() {
   var count = lastRow - 1;
   sheet.deleteRows(2, count);
   Logger.log('Deleted ' + count + ' test rows. The next request will start from DSL001.');
+}
+
+// Password-gated version of resetAllRequests_(), reachable via the web app
+// (action=clearAllData) — used by the "Clear All Data" button on index.html,
+// visible only to whoever is logged into that page (Director/Developer).
+// The password is checked here on the server, not just in the browser, so
+// calling this action directly (bypassing the UI) still requires it.
+function clearAllData_(body) {
+  if (!body.password || body.password !== ADMIN_RESET_PASSWORD) {
+    return { ok: false, error: 'Incorrect password' };
+  }
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sheet = getSheet_();
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { ok: true, deletedCount: 0 };
+    var count = lastRow - 1;
+    sheet.deleteRows(2, count);
+    Logger.log('All data cleared via web app by "' + (body.clearedBy || 'unknown') + '". Deleted ' + count + ' rows. Next request starts at DSL001.');
+    return { ok: true, deletedCount: count };
+  } finally {
+    lock.releaseLock();
+  }
 }

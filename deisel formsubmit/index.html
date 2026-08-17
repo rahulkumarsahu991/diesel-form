@@ -65,6 +65,8 @@
     box-shadow:0 2px 8px rgba(16,19,46,.12);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
   .ov-toolbar button.active{background:var(--orange);color:#fff;border-color:var(--orange);}
   .ov-refresh{margin-left:auto;background:none !important;border:none !important;color:var(--gold) !important;}
+  .ov-danger{background:rgba(220,38,38,.15) !important;border:1px solid rgba(220,38,38,.5) !important;color:#fca5a5 !important;}
+  .ov-danger:active{background:rgba(220,38,38,.3) !important;}
   .table-wrap{overflow-x:auto;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:16px;
     box-shadow:0 8px 32px rgba(16,19,46,.2);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);}
   table{width:100%;border-collapse:collapse;font-size:13px;min-width:840px;}
@@ -171,6 +173,26 @@
     20%,60%{transform:translateX(-9px);}
     40%,80%{transform:translateX(9px);}
   }
+
+  /* ---------- Clear All Data confirmation modal ---------- */
+  .cd-overlay{position:fixed;inset:0;z-index:1100;display:none;align-items:center;justify-content:center;padding:20px;
+    background:rgba(8,9,24,.72);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}
+  .cd-overlay.show{display:flex;}
+  .cd-modal{width:100%;max-width:380px;background:#fff;border:2px solid #dc2626;border-radius:18px;padding:26px 24px;
+    text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.4);}
+  .cd-icon{font-size:34px;margin-bottom:6px;}
+  .cd-modal h3{margin:0 0 10px;font-family:Georgia,'Times New Roman',serif;font-size:19px;color:#dc2626;}
+  .cd-modal p{margin:0 0 16px;font-size:13px;color:var(--muted);line-height:1.5;text-align:left;}
+  .cd-modal label{display:block;font-size:12px;font-weight:600;color:var(--muted);text-align:left;margin:10px 0 5px;}
+  .cd-modal input{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:9px;
+    font-size:16px;font-family:inherit;background:#fff;}
+  .cd-modal input:focus{outline:none;border-color:#dc2626;}
+  .cd-err{margin-top:10px;font-size:13px;color:#dc2626;font-weight:600;min-height:18px;text-align:left;}
+  .cd-actions{display:flex;gap:10px;margin-top:8px;}
+  .cd-actions button{flex:1;padding:12px;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;border:none;}
+  .cd-cancel{background:#f4f5f7;color:var(--ink);border:1px solid var(--border) !important;}
+  .cd-confirm{background:#dc2626;color:#fff;}
+  .cd-confirm:disabled{opacity:.6;cursor:not-allowed;}
 </style>
 </head>
 <body>
@@ -239,6 +261,7 @@
       <button class="ov-filter" data-status="Approved">Approved</button>
       <button class="ov-filter" data-status="Dispensed">Dispensed</button>
       <button class="ov-filter" data-status="Rejected">Rejected</button>
+      <button class="ov-danger" id="clearDataBtn">🗑️ Clear All Data</button>
       <button class="ov-refresh" id="ovRefresh">↻ Refresh</button>
     </div>
 
@@ -263,6 +286,23 @@
         </thead>
         <tbody id="ovBody"><tr><td colspan="12" class="ov-loading">Loading...</td></tr></tbody>
       </table>
+    </div>
+  </div>
+
+  <div id="clearDataOverlay" class="cd-overlay">
+    <div class="cd-modal">
+      <div class="cd-icon">⚠️</div>
+      <h3>Clear All Data</h3>
+      <p>This permanently deletes <b>every request</b> from the sheet. This cannot be undone. The next new request will start again from <b>DSL001</b>.</p>
+      <label>Your Name</label>
+      <input type="text" id="cdName" placeholder="Your name" autocomplete="off">
+      <label>Admin Password</label>
+      <input type="password" id="cdPassword" placeholder="Password" autocomplete="off">
+      <div class="cd-err" id="cdErr"></div>
+      <div class="cd-actions">
+        <button type="button" id="cdCancel" class="cd-cancel">Cancel</button>
+        <button type="button" id="cdConfirm" class="cd-confirm">Yes, Clear Everything</button>
+      </div>
     </div>
   </div>
 
@@ -488,6 +528,53 @@
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
     });
   }
+
+  /* ---------- Clear All Data (Director/Developer only) ---------- */
+  var clearDataBtn = document.getElementById('clearDataBtn');
+  var cdOverlay = document.getElementById('clearDataOverlay');
+  var cdName = document.getElementById('cdName');
+  var cdPassword = document.getElementById('cdPassword');
+  var cdErr = document.getElementById('cdErr');
+  var cdCancel = document.getElementById('cdCancel');
+  var cdConfirm = document.getElementById('cdConfirm');
+
+  clearDataBtn.addEventListener('click', function(){
+    cdName.value = '';
+    cdPassword.value = '';
+    cdErr.textContent = '';
+    cdOverlay.classList.add('show');
+    cdName.focus();
+  });
+  cdCancel.addEventListener('click', function(){ cdOverlay.classList.remove('show'); });
+  cdOverlay.addEventListener('click', function(e){ if (e.target === cdOverlay) cdOverlay.classList.remove('show'); });
+
+  cdConfirm.addEventListener('click', function(){
+    var name = cdName.value.trim();
+    var password = cdPassword.value;
+    cdErr.textContent = '';
+    if (!name) { cdErr.textContent = 'Enter your name.'; cdName.focus(); return; }
+    if (!password) { cdErr.textContent = 'Enter the admin password.'; cdPassword.focus(); return; }
+    if (!APPS_SCRIPT_URL) { cdErr.textContent = 'Setup pending: paste the APPS_SCRIPT_URL.'; return; }
+
+    cdConfirm.disabled = true;
+    cdConfirm.textContent = 'Clearing...';
+    fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'clearAllData', password: password, clearedBy: name })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if (!res.ok) { cdErr.textContent = '❌ ' + res.error; return; }
+      cdOverlay.classList.remove('show');
+      loadOverview();
+    })
+    .catch(function(err){ cdErr.textContent = '❌ Network error: ' + err.message; })
+    .finally(function(){
+      cdConfirm.disabled = false;
+      cdConfirm.textContent = 'Yes, Clear Everything';
+    });
+  });
 
   loadOverview();
 </script>
