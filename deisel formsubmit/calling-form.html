@@ -220,18 +220,18 @@
         </div>
         <div class="history-box" id="vehicleHistory"></div>
 
-        <label>Driver ID <span class="req">*</span></label>
-        <input type="text" id="driverId" required autocomplete="off" placeholder="Enter Driver ID">
+        <label>Driver ID <span class="hint" style="font-weight:400;">(optional — leave blank if unknown)</span></label>
+        <input type="text" id="driverId" autocomplete="off" placeholder="Enter Driver ID if you have it">
         <div class="driver-info" id="driverInfo"></div>
 
         <div class="row2">
           <div>
-            <label>Driver Name (auto)</label>
-            <input type="text" id="driverNameAuto" readonly placeholder="Auto-fills from Driver ID">
+            <label>Driver Name <span class="req">*</span></label>
+            <input type="text" id="driverNameAuto" required placeholder="Auto-fills from Driver ID, or type it">
           </div>
           <div>
-            <label>Contact Number (auto)</label>
-            <input type="tel" id="contactNumber" readonly placeholder="Auto-fills from Driver ID">
+            <label>Contact Number</label>
+            <input type="tel" id="contactNumber" placeholder="Auto-fills from Driver ID, or type it">
           </div>
         </div>
 
@@ -500,6 +500,10 @@
     fetchedDriver = null;
     driverNameAuto.value = '';
     contactNumber.value = '';
+    driverNameAuto.readOnly = false;
+    contactNumber.readOnly = false;
+    driverNameAuto.placeholder = 'Auto-fills from Driver ID, or type it';
+    contactNumber.placeholder = 'Auto-fills from Driver ID, or type it';
     var id = driverIdInput.value.trim();
     clearTimeout(driverTimer);
     if (!id) { driverInfo.className = 'driver-info'; return; }
@@ -522,17 +526,19 @@
           fetchedDriver = { name: res.name, mobile: res.mobile };
           driverNameAuto.value = res.name;
           contactNumber.value = res.mobile;
+          driverNameAuto.readOnly = true;
+          contactNumber.readOnly = true;
           driverInfo.className = 'driver-info';
         } else {
           fetchedDriver = null;
           driverInfo.className = 'driver-info err';
-          driverInfo.textContent = '❌ ' + res.error;
+          driverInfo.textContent = '❌ ' + res.error + ' — you can type the driver\'s name manually below instead.';
         }
       })
       .catch(function(err){
         fetchedDriver = null;
         driverInfo.className = 'driver-info err';
-        driverInfo.textContent = '❌ Network error: ' + err.message;
+        driverInfo.textContent = '❌ Network error: ' + err.message + ' — you can type the driver\'s name manually below instead.';
       });
   }
 
@@ -544,9 +550,10 @@
       showMsg('err', 'Setup pending: deploy Code.gs and paste the APPS_SCRIPT_URL here in the HTML.');
       return;
     }
-    if (!fetchedDriver) {
-      showMsg('err', '❌ Enter a valid Driver ID first — let Name/Mobile fetch (a green message will show above).');
-      driverIdInput.focus();
+    var driverNameVal = driverNameAuto.value.trim();
+    if (!driverNameVal) {
+      showMsg('err', '❌ Enter the Driver Name (or a valid Driver ID to auto-fill it).');
+      driverNameAuto.focus();
       return;
     }
 
@@ -554,10 +561,10 @@
       action: 'create',
       vehicleNo: vehicleInput.value.trim(),
       driverId: driverIdInput.value.trim(),
-      driverName: fetchedDriver.name,
+      driverName: driverNameVal,
       odometerKm: document.getElementById('odometerKm').value,
       requestedLiters: document.getElementById('requestedLiters').value,
-      contactNumber: contactNumber.value,
+      contactNumber: contactNumber.value.trim(),
       routeTrip: document.getElementById('routeTrip').value.trim(),
       currentLocation: currentLocationInput.value.trim(),
       requestedBy: document.getElementById('requestedBy').value.trim(),
@@ -584,6 +591,8 @@
         driverInfo.className = 'driver-info';
         driverNameAuto.value = '';
         contactNumber.value = '';
+        driverNameAuto.readOnly = false;
+        contactNumber.readOnly = false;
         locationInfo.className = 'driver-info';
         vehicleHistoryBox.style.display = 'none';
       } else {
