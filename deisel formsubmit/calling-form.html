@@ -54,6 +54,7 @@
   @media (max-width:420px){ .row2{grid-template-columns:1fr;} }
   .location-row{display:flex;gap:8px;}
   .location-row input{flex:1;}
+  .location-row .autocomplete-wrap{flex:1;}
   .location-row button{width:auto;margin-top:0;padding:11px 14px;background:#fff;color:var(--navy);
     border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;white-space:nowrap;}
   .location-row button:active{background:var(--orange-light);}
@@ -249,7 +250,10 @@
 
         <label>Current Location</label>
         <div class="location-row">
-          <input type="text" id="currentLocation" placeholder="e.g. near NH-6, Bilaspur">
+          <div class="autocomplete-wrap">
+            <input type="text" id="currentLocation" autocomplete="off" placeholder="e.g. near NH-6, Bilaspur, or type a place name">
+            <div class="suggestions" id="locationSuggestions"></div>
+          </div>
           <button type="button" id="useLocationBtn">📍 Use My Location</button>
         </div>
         <div class="driver-info" id="locationInfo"></div>
@@ -456,8 +460,54 @@
       });
   }
 
-  /* ---------- Current Location: GPS auto-fill ---------- */
+  /* ---------- Current Location: place-name suggestions (OpenStreetMap Nominatim) ----------
+     Free, no API key. Usage policy asks for max ~1 req/sec, so we debounce 600ms and
+     only search once 3+ characters are typed. Results restricted to India. */
   var currentLocationInput = document.getElementById('currentLocation');
+  var locationSuggestions = document.getElementById('locationSuggestions');
+  var locationSearchTimer = null;
+  var locationSearchToken = 0;
+
+  currentLocationInput.addEventListener('input', function(){
+    clearTimeout(locationSearchTimer);
+    var q = currentLocationInput.value.trim();
+    if (q.length < 3) { locationSuggestions.classList.remove('show'); return; }
+    locationSuggestions.innerHTML = '<div class="none">Searching...</div>';
+    locationSuggestions.classList.add('show');
+    locationSearchTimer = setTimeout(function(){ searchPlaces(q); }, 600);
+  });
+  currentLocationInput.addEventListener('blur', function(){ setTimeout(function(){ locationSuggestions.classList.remove('show'); }, 150); });
+
+  function searchPlaces(q){
+    var token = ++locationSearchToken;
+    fetch('https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&limit=8&countrycodes=in&q=' + encodeURIComponent(q))
+      .then(function(r){ return r.json(); })
+      .then(function(results){
+        if (token !== locationSearchToken) return; // stale response, ignore
+        if (!results || !results.length) {
+          locationSuggestions.innerHTML = '<div class="none">No matching place found — your typed value will be used</div>';
+          locationSuggestions.classList.add('show');
+          return;
+        }
+        locationSuggestions.innerHTML = results.map(function(r){
+          return '<div class="item">' + esc(r.display_name) + '</div>';
+        }).join('');
+        locationSuggestions.classList.add('show');
+        locationSuggestions.querySelectorAll('.item').forEach(function(el, i){
+          el.addEventListener('mousedown', function(e){
+            e.preventDefault();
+            currentLocationInput.value = results[i].display_name;
+            locationSuggestions.classList.remove('show');
+          });
+        });
+      })
+      .catch(function(){
+        if (token !== locationSearchToken) return;
+        locationSuggestions.classList.remove('show');
+      });
+  }
+
+  /* ---------- Current Location: GPS auto-fill ---------- */
   var useLocationBtn = document.getElementById('useLocationBtn');
   var locationInfo = document.getElementById('locationInfo');
 
