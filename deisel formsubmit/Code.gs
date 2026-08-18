@@ -537,9 +537,9 @@ function fillEmpty_(row) {
  *   3. Click "Run" (▶)
  *   4. The execution log will show "Deleted X test rows"
  *
- * This deletes ALL rows in the "Requests" tab (the header stays safe)
- * and the next request will start again from DSL001.
- * WARNING: this cannot be undone — confirm before running.
+ * Every row is copied into the "Archive" tab first (tagged "manual editor
+ * run"), so nothing is actually lost — it's just moved out of "Requests".
+ * The next request will start again from DSL001.
  *********************************************************************/
 function resetAllRequests() {
   var sheet = getSheet_();
@@ -548,9 +548,36 @@ function resetAllRequests() {
     Logger.log('Sheet is already empty — nothing to delete.');
     return;
   }
+  archiveRequests_(sheet, 'manual editor run');
   var count = lastRow - 1;
   sheet.deleteRows(2, count);
-  Logger.log('Deleted ' + count + ' test rows. The next request will start from DSL001.');
+  Logger.log('Archived + deleted ' + count + ' rows. The next request will start from DSL001.');
+}
+
+var ARCHIVE_SHEET_NAME = 'Archive';
+
+// Copies every current row from "Requests" into the "Archive" tab (creating it
+// with headers on first use) before a clear, tagging each row with who cleared
+// it and when — so cleared data is never actually gone, just moved out of the
+// active view. The Developer/Director can open the Archive tab any time to
+// browse everything that's ever been cleared.
+function archiveRequests_(sheet, clearedBy) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+  var data = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var archive = ss.getSheetByName(ARCHIVE_SHEET_NAME);
+  if (!archive) {
+    archive = ss.insertSheet(ARCHIVE_SHEET_NAME);
+    archive.getRange(1, 1, 1, HEADERS.length + 2).setValues([HEADERS.concat(['Cleared At', 'Cleared By'])]);
+    archive.setFrozenRows(1);
+  }
+
+  var now = new Date();
+  var rows = data.map(function(row){ return row.concat([now, clearedBy || 'unknown']); });
+  archive.getRange(archive.getLastRow() + 1, 1, rows.length, HEADERS.length + 2).setValues(rows);
+  return rows.length;
 }
 
 // Password-gated version of resetAllRequests_(), reachable via the web app
@@ -568,9 +595,10 @@ function clearAllData_(body) {
     var sheet = getSheet_();
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return { ok: true, deletedCount: 0 };
+    archiveRequests_(sheet, body.clearedBy);
     var count = lastRow - 1;
     sheet.deleteRows(2, count);
-    Logger.log('All data cleared via web app by "' + (body.clearedBy || 'unknown') + '". Deleted ' + count + ' rows. Next request starts at DSL001.');
+    Logger.log('All data cleared via web app by "' + (body.clearedBy || 'unknown') + '". Archived + deleted ' + count + ' rows. Next request starts at DSL001.');
     return { ok: true, deletedCount: count };
   } finally {
     lock.releaseLock();
