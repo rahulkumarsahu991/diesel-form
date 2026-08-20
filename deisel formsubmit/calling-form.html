@@ -419,7 +419,7 @@
   }
 
   var vehicleInput = document.getElementById('vehicleNo');
-  setupAutocomplete(vehicleInput, document.getElementById('vehicleSuggestions'), 'vehicles', function(v){ loadVehicleHistory(v); });
+  setupAutocomplete(vehicleInput, document.getElementById('vehicleSuggestions'), 'vehicles', function(v){ loadVehicleHistory(v); lookupDriverForVehicle(v); });
   setupAutocomplete(document.getElementById('routeTrip'), document.getElementById('routeSuggestions'), 'routes');
 
   /* ---------- Vehicle No -> last 5 refueling history ---------- */
@@ -430,8 +430,25 @@
     clearTimeout(vehicleHistoryTimer);
     var v = vehicleInput.value.trim();
     if (!v) { vehicleHistoryBox.style.display = 'none'; return; }
-    vehicleHistoryTimer = setTimeout(function(){ loadVehicleHistory(v); }, 500);
+    vehicleHistoryTimer = setTimeout(function(){ loadVehicleHistory(v); lookupDriverForVehicle(v); }, 500);
   });
+
+  /* ---------- Vehicle No -> today's on-duty driver (Attendance sheet) ----------
+     Only auto-fills the Driver ID if it's still empty, so it never overwrites
+     a Driver ID the caller already typed in themselves. Filling Driver ID
+     re-uses the existing Driver ID -> Name/Mobile lookup below. */
+  function lookupDriverForVehicle(vehicle){
+    if (!vehicle || !APPS_SCRIPT_URL || driverIdInput.value.trim()) return;
+    fetch(APPS_SCRIPT_URL + '?action=vehicleDriver&vehicle=' + encodeURIComponent(vehicle))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (vehicleInput.value.trim() !== vehicle) return; // stale response, ignore
+        if (!res.ok || driverIdInput.value.trim()) return; // no match, or user typed one meanwhile
+        driverIdInput.value = res.driverId;
+        driverIdInput.dispatchEvent(new Event('input'));
+      })
+      .catch(function(){ /* best-effort — caller can still enter Driver ID/name manually */ });
+  }
 
   function loadVehicleHistory(vehicle){
     if (!vehicle || !APPS_SCRIPT_URL) { vehicleHistoryBox.style.display = 'none'; return; }

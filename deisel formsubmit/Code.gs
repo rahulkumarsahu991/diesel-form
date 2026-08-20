@@ -66,6 +66,17 @@ var ROUTE_SHEET_NAME = 'Routes';
 var ROUTE_FROM_COL = 3; // Column C
 var ROUTE_TO_COL = 4;   // Column D
 
+// Attendance sheet: Vehicle No -> today's on-duty Driver ID/Name/Mobile.
+// Layout: Col A=Sl No, B=Driver ID, C=Driver Name, D=Mobile, then a pair of
+// columns per day of the month starting at E (Vehicle No that day, then
+// TRUE/FALSE present). NOTE: tab name is month-specific ("Attendance Aug") —
+// update ATTENDANCE_SHEET_NAME each month, or this lookup silently finds nothing.
+var ATTENDANCE_SHEET_ID = '1wgG2K9phHMQPvIskvXF1OBHxNHFk8pegrKCi0hvuF6U';
+var ATTENDANCE_SHEET_NAME = 'Attendance Aug';
+var ATTENDANCE_ID_COL = 2;     // Column B
+var ATTENDANCE_NAME_COL = 3;   // Column C
+var ATTENDANCE_MOBILE_COL = 4; // Column D
+
 var HEADERS = [
   'Request ID', 'Created At', 'Vehicle No', 'Driver ID', 'Driver Name',
   'Route / Trip', 'Pump / Location', 'Requested Liters', 'Requested By',
@@ -95,6 +106,7 @@ function doGet(e) {
     if (action === 'get') return jsonOut_(getRequest_(p.id));
     if (action === 'vehicles') return jsonOut_(listVehicles_());
     if (action === 'driver') return jsonOut_(lookupDriver_(p.id));
+    if (action === 'vehicleDriver') return jsonOut_(lookupDriverByVehicleToday_(p.vehicle));
     if (action === 'pumps') return jsonOut_(listPumps_());
     if (action === 'routes') return jsonOut_(listRoutes_());
     if (action === 'history') return jsonOut_(vehicleHistory_(p.vehicle, p.limit || 5));
@@ -496,6 +508,71 @@ function lookupDriver_(id) {
     }
   }
   return { ok: false, error: 'Driver ID not found' };
+}
+
+// Vehicle No -> today's on-duty driver, from the Attendance sheet. Only matches
+// if that vehicle's attendance cell for today is TRUE (present) — an absent/
+// off-duty driver assigned to the vehicle on paper does not count.
+// Result is cached for 10 minutes (keyed by today's date) since the whole
+// sheet only needs re-reading once per day in practice.
+function lookupDriverByVehicleToday_(vehicle) {
+  if (!vehicle) return { ok: false, error: 'Provide a Vehicle No' };
+  var target = String(vehicle).trim().toUpperCase();
+
+  var cache = CacheService.getScriptCache();
+  var todayKey = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
+  var cacheKey = 'attmap_' + todayKey;
+  var map;
+  var cached = cache.get(cacheKey);
+  if (cached) {
+    map = JSON.parse(cached);
+  } else {
+    map = buildTodayAttendanceMap_();
+    try { cache.put(cacheKey, JSON.stringify(map), 600); } catch (e) {} // 10 min
+  }
+
+  var entry = map[target];
+  if (!entry) return { ok: false, error: 'No on-duty driver found for this vehicle today in Attendance sheet' };
+  return { ok: true, driverId: entry.driverId, name: entry.name, mobile: entry.mobile };
+}
+
+function buildTodayAttendanceMap_() {
+  var map = {};
+  var ss = SpreadsheetApp.openById(ATTENDANCE_SHEET_ID);
+  var sheet = findSheetLoose_(ss, ATTENDANCE_SHEET_NAME);
+  if (!sheet) return map;
+
+  var lastCol = sheet.getLastColumn();
+  var lastRow = sheet.getLastRow();
+  if (lastCol < 1 || lastRow < 2) return map;
+
+  var todayStr = Utilities.formatDate(new Date(), TIMEZONE, 'dd/MM/yyyy');
+  var header = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var vehicleCol = -1;
+  for (var c = 0; c < header.length; c++) {
+    var h = header[c];
+    var hStr = (h instanceof Date) ? Utilities.formatDate(h, TIMEZONE, 'dd/MM/yyyy') : String(h || '').trim();
+    if (hStr === todayStr) { vehicleCol = c; break; }
+  }
+  if (vehicleCol === -1) return map; // today's date column isn't in this sheet (e.g. wrong month's tab)
+
+  var attendanceCol = vehicleCol + 1;
+  var data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  for (var i = 0; i < data.length; i++) {
+    var row = data[i];
+    var driverId = String(row[ATTENDANCE_ID_COL - 1] || '').trim();
+    if (!driverId) continue;
+    var vehicleForToday = String(row[vehicleCol] || '').trim().toUpperCase();
+    if (!vehicleForToday) continue;
+    var present = row[attendanceCol] === true || String(row[attendanceCol]).trim().toUpperCase() === 'TRUE';
+    if (!present) continue;
+    map[vehicleForToday] = {
+      driverId: driverId,
+      name: String(row[ATTENDANCE_NAME_COL - 1] || '').trim(),
+      mobile: String(row[ATTENDANCE_MOBILE_COL - 1] || '').trim()
+    };
+  }
+  return map;
 }
 
 // Tries an exact match first, then a loose match ignoring case/extra spaces
