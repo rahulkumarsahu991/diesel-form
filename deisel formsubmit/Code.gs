@@ -510,9 +510,9 @@ function lookupDriver_(id) {
   return { ok: false, error: 'Driver ID not found' };
 }
 
-// Vehicle No -> today's on-duty driver, from the Attendance sheet. Only matches
-// if that vehicle's attendance cell for today is TRUE (present) — an absent/
-// off-duty driver assigned to the vehicle on paper does not count.
+// Vehicle No -> today's assigned driver, from the Attendance sheet. Matches
+// whichever driver is assigned to this vehicle in today's date column,
+// present or absent (attendance TRUE/FALSE is not checked).
 // Result is cached for 10 minutes (keyed by today's date) since the whole
 // sheet only needs re-reading once per day in practice.
 function lookupDriverByVehicleToday_(vehicle) {
@@ -532,7 +532,7 @@ function lookupDriverByVehicleToday_(vehicle) {
   }
 
   var entry = map[target];
-  if (!entry) return { ok: false, error: 'No on-duty driver found for this vehicle today in Attendance sheet' };
+  if (!entry) return { ok: false, error: 'No driver assigned to this vehicle today in Attendance sheet' };
   return { ok: true, driverId: entry.driverId, name: entry.name, mobile: entry.mobile };
 }
 
@@ -556,7 +556,6 @@ function buildTodayAttendanceMap_() {
   }
   if (vehicleCol === -1) return map; // today's date column isn't in this sheet (e.g. wrong month's tab)
 
-  var attendanceCol = vehicleCol + 1;
   var data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
   for (var i = 0; i < data.length; i++) {
     var row = data[i];
@@ -564,8 +563,8 @@ function buildTodayAttendanceMap_() {
     if (!driverId) continue;
     var vehicleForToday = String(row[vehicleCol] || '').trim().toUpperCase();
     if (!vehicleForToday) continue;
-    var present = row[attendanceCol] === true || String(row[attendanceCol]).trim().toUpperCase() === 'TRUE';
-    if (!present) continue;
+    // Match on vehicle assignment alone — present or absent, whichever
+    // driver is assigned to this vehicle today per the sheet still counts.
     map[vehicleForToday] = {
       driverId: driverId,
       name: String(row[ATTENDANCE_NAME_COL - 1] || '').trim(),
