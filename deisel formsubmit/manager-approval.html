@@ -546,12 +546,13 @@
         '<td>' + esc(r.approvedLiters || '-') + '</td>' +
         '<td>' + esc(r.actualLiters || '-') + '</td>' +
         '<td>' + esc(r.driverName || '-') + '</td>' +
+        '<td>' + esc(r.requestedBy || '-') + '</td>' +
         '<td>' + esc(r.managerName || '-') + '</td>' +
         '<td>' + esc(r.dispensedBy || '-') + '</td>' +
       '</tr>';
     }).join('');
     return '<div class="vo-history-wrap"><table class="vo-history-table">' +
-      '<thead><tr><th>Req ID</th><th>Date</th><th>Status</th><th>Req.L</th><th>Appr.L</th><th>Actual L</th><th>Driver</th><th>Manager</th><th>Dispensed By</th></tr></thead>' +
+      '<thead><tr><th>Req ID</th><th>Date</th><th>Status</th><th>Req.L</th><th>Appr.L</th><th>Actual L</th><th>Driver</th><th>Requested By</th><th>Manager</th><th>Dispensed By</th></tr></thead>' +
       '<tbody>' + rowsHtml + '</tbody></table></div>';
   }
 </script>
