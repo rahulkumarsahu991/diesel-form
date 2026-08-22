@@ -54,13 +54,17 @@
   .msg{margin-top:14px;padding:12px 14px;border-radius:8px;font-size:14px;display:none;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
   .msg.err{background:rgba(254,242,242,.8);color:var(--red);border:1px solid #fecaca;display:block;}
   .details{margin-top:4px;}
-  .details .row, .receipt .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px dashed var(--border);}
+  .details .row, .receipt .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:5px 0;border-bottom:1px dashed var(--border);}
   .details .row span:first-child, .receipt .row span:first-child{color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
   .details .row span:last-child, .receipt .row span:last-child{font-weight:700;text-align:right;font-size:14px;color:var(--ink);}
-  .receipt{border:2px dashed var(--green);border-radius:10px;padding:18px;margin-top:16px;}
-  .receipt .rlogo{display:block;height:44px;width:auto;margin:0 auto 8px;border-radius:8px;}
+  .receipt{border:2px dashed var(--green);border-radius:10px;padding:18px;margin-top:16px;background:#fff;}
+  .receipt .rbrand{text-align:center;padding-bottom:12px;margin-bottom:12px;border-bottom:2px solid var(--navy);}
+  .receipt .rbrand-logo{display:block;height:42px;width:auto;margin:0 auto 6px;}
+  .receipt .rbrand-title{font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:17px;color:var(--navy);}
+  .receipt .rbrand-sub{font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--orange-dark);font-weight:700;margin-top:4px;}
+  .receipt .rlogo{display:block;height:40px;width:auto;margin:0 auto 6px;border-radius:8px;}
   .receipt h2{margin:0 0 4px;font-size:16px;text-align:center;color:var(--green-dark);}
-  .receipt .rno{text-align:center;font-size:13px;color:var(--muted);margin-bottom:14px;}
+  .receipt .rno{text-align:center;font-size:13px;color:var(--muted);margin-bottom:12px;}
   .print-btn{background:var(--blue);}
   .new-btn{background:#fff;color:var(--ink);border:1px solid var(--border);}
 
@@ -153,11 +157,15 @@
     .wrap{max-width:100%;padding:0;margin:0;}
     .card{border:none;box-shadow:none;background:#fff !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;
       margin-top:0;padding:0;}
-    .receipt{border:1px solid #999;border-radius:0;padding:12px;margin-top:0;page-break-inside:avoid;}
-    .receipt .rlogo{height:36px;margin-bottom:6px;}
+    .receipt{border:1px solid #999;border-radius:0;padding:12px;margin-top:0;page-break-inside:avoid;background:#fff !important;}
+    .receipt .rbrand{padding-bottom:8px;margin-bottom:8px;}
+    .receipt .rbrand-logo{height:34px;}
+    .receipt .rbrand-title{font-size:14px;}
+    .receipt .rbrand-sub{font-size:8px;}
+    .receipt .rlogo{height:32px;margin-bottom:4px;}
     .receipt h2{font-size:14px;margin-bottom:2px;}
     .receipt .rno{font-size:11px;margin-bottom:8px;}
-    .receipt .row{padding:3px 0;}
+    .receipt .row{padding:2.5px 0;}
     .receipt .row span:first-child{font-size:9px;}
     .receipt .row span:last-child{font-size:11px;}
   }
@@ -417,6 +425,11 @@
     document.getElementById('dispenseCard').style.display = 'none';
     var box = document.getElementById('receiptBox');
     box.innerHTML =
+      '<div class="rbrand">' +
+        '<img src="logo.png" alt="Logo" class="rbrand-logo">' +
+        '<div class="rbrand-title">⛽ Diesel Approval System</div>' +
+        '<div class="rbrand-sub">3-Stage Workflow — Calling Team → Manager → Diesel Team</div>' +
+      '</div>' +
       '<img src="logo.png" alt="Logo" class="rlogo">' +
       '<h2>✅ Diesel Dispensed</h2>' +
       '<div class="rno">Receipt No: ' + r.receiptNo + '</div>' +
