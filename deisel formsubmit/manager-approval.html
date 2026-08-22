@@ -280,13 +280,17 @@
     card.className = 'card';
     var editable = row.status === 'Pending';
 
+    var metaParts = [fmtDate(row.createdAt), 'Requested by ' + esc(row.requestedBy)];
+    if (row.managerName) metaParts.push((row.status === 'Rejected' ? 'Rejected by ' : 'Approved by ') + esc(row.managerName));
+    if (row.dispensedBy) metaParts.push('Dispensed by ' + esc(row.dispensedBy));
+
     var header = document.createElement('div');
     header.className = 'card-head';
     header.innerHTML =
       '<div>' +
         '<div class="req-id">' + esc(row.id) + '</div>' +
         '<div class="card-summary">' + esc(row.vehicleNo || '-') + ' • ' + esc(row.driverName || '-') + ' • ' + esc(row.requestedLiters) + ' L</div>' +
-        '<div class="meta">' + fmtDate(row.createdAt) + ' • by ' + esc(row.requestedBy) + '</div>' +
+        '<div class="meta">' + metaParts.join(' • ') + '</div>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">' +
         '<span class="status-chip status-' + row.status + '">' + row.status + '</span>' +
@@ -332,7 +336,7 @@
       var note = document.createElement('div');
       note.className = 'meta';
       note.style.marginTop = '10px';
-      note.textContent = 'Approved by ' + (row.managerName || '-') + ' • This request will now show directly in the Diesel Team\'s "Approved Requests" list.';
+      note.textContent = 'This request now shows directly in the Diesel Team\'s "Approved Requests" list.';
       body.appendChild(note);
     }
 
