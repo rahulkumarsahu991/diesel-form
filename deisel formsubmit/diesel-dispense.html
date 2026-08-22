@@ -100,6 +100,9 @@
   .req-card .rc-meta{font-size:12px;color:var(--muted);margin-top:3px;}
   .rc-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
   .req-card .rc-liters{font-weight:700;color:var(--green-dark);white-space:nowrap;}
+  .rc-print-btn{background:none;border:none;font-size:16px;line-height:1;cursor:pointer;padding:6px;margin:-6px;
+    color:var(--muted);flex-shrink:0;border-radius:6px;}
+  .rc-print-btn:active{background:rgba(29,78,216,.12);color:var(--blue);}
   .req-card .rc-chevron{font-size:11px;color:var(--muted);transition:transform .2s;}
   .req-card.open .rc-chevron{transform:rotate(180deg);}
   .req-card-body{max-height:0;opacity:0;overflow:hidden;padding:0 16px;
@@ -422,6 +425,17 @@
     document.getElementById('receiptCard').style.display = 'block';
   }
 
+  // Reprint the receipt for an already-dispensed request straight from the
+  // browsable list — no need to re-verify via Request ID/OTP again.
+  function printReceiptFromList(r){
+    document.getElementById('verifyCard').style.display = 'none';
+    listBody.classList.remove('show');
+    listChevron.textContent = '▾';
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    showReceipt(r);
+    setTimeout(function(){ window.print(); }, 150);
+  }
+
   function resetAll(){
     verifiedRow = null;
     document.getElementById('reqId').value = '';
@@ -523,6 +537,8 @@
     card.className = 'req-card';
     card.style.setProperty('--accent', accent);
 
+    var printIconHtml = r.status === 'Dispensed' ? '<button type="button" class="rc-print-btn" title="Print receipt">🖨️</button>' : '';
+
     var head = document.createElement('div');
     head.className = 'req-card-head';
     head.innerHTML =
@@ -531,12 +547,18 @@
         '<div class="rc-meta">' + esc(r.vehicleNo) + ' • ' + esc(r.driverName || '-') + '</div>' +
         '<div class="rc-meta">By: ' + esc(r.requestedBy || '-') + ' • ' + fmtDate(r.createdAt) + '</div>' +
       '</div>' +
-      '<div class="rc-right"><span class="rc-liters">' + esc(liters) + ' L</span><span class="rc-chevron">▾</span></div>';
+      '<div class="rc-right">' + printIconHtml + '<span class="rc-liters">' + esc(liters) + ' L</span><span class="rc-chevron">▾</span></div>';
     head.addEventListener('click', function(){
       var wasOpen = card.classList.contains('open');
       approvedList.querySelectorAll('.req-card.open').forEach(function(el){ el.classList.remove('open'); });
       if (!wasOpen) card.classList.add('open');
     });
+    if (r.status === 'Dispensed') {
+      head.querySelector('.rc-print-btn').addEventListener('click', function(e){
+        e.stopPropagation();
+        printReceiptFromList(r);
+      });
+    }
     card.appendChild(head);
 
     var body = document.createElement('div');
