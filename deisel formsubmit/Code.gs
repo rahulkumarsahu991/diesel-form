@@ -486,28 +486,56 @@ function listRoutes_() {
 
 function lookupDriver_(id) {
   if (!id) return { ok: false, error: 'Provide a Driver ID' };
+  var target = String(id).trim().toLowerCase();
 
   var ss = SpreadsheetApp.openById(DRIVER_SHEET_ID);
   var sheet = ss.getSheetByName(DRIVER_SHEET_NAME);
-  if (!sheet) return { ok: false, error: '"' + DRIVER_SHEET_NAME + '" tab not found' };
+  if (sheet) {
+    var lastRow = sheet.getLastRow();
+    if (lastRow >= 2) {
+      var data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+      for (var i = 0; i < data.length; i++) {
+        var rowId = String(data[i][DRIVER_ID_COL - 1] || '').trim().toLowerCase();
+        if (rowId === target) {
+          return {
+            ok: true,
+            driverId: data[i][DRIVER_ID_COL - 1],
+            name: String(data[i][DRIVER_NAME_COL - 1] || '').trim(),
+            mobile: String(data[i][DRIVER_MOBILE_COL - 1] || '').trim()
+          };
+        }
+      }
+    }
+  }
 
+  // Fallback: a driver sometimes shows up in Attendance before anyone gets
+  // around to adding them to Driver Details — same ID/Name/Mobile columns
+  // exist there too, so check it before giving up.
+  var fromAttendance = lookupDriverInAttendance_(target);
+  if (fromAttendance) return fromAttendance;
+
+  return { ok: false, error: 'Driver ID not found' };
+}
+
+function lookupDriverInAttendance_(targetLower) {
+  var ss = SpreadsheetApp.openById(ATTENDANCE_SHEET_ID);
+  var sheet = findSheetLoose_(ss, ATTENDANCE_SHEET_NAME);
+  if (!sheet) return null;
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { ok: false, error: 'Driver ID not found' };
-
-  var data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
-  var target = String(id).trim().toLowerCase();
+  if (lastRow < 2) return null;
+  var data = sheet.getRange(2, 1, lastRow - 1, ATTENDANCE_MOBILE_COL).getValues();
   for (var i = 0; i < data.length; i++) {
-    var rowId = String(data[i][DRIVER_ID_COL - 1] || '').trim().toLowerCase();
-    if (rowId === target) {
+    var rowId = String(data[i][ATTENDANCE_ID_COL - 1] || '').trim().toLowerCase();
+    if (rowId === targetLower) {
       return {
         ok: true,
-        driverId: data[i][DRIVER_ID_COL - 1],
-        name: String(data[i][DRIVER_NAME_COL - 1] || '').trim(),
-        mobile: String(data[i][DRIVER_MOBILE_COL - 1] || '').trim()
+        driverId: data[i][ATTENDANCE_ID_COL - 1],
+        name: String(data[i][ATTENDANCE_NAME_COL - 1] || '').trim(),
+        mobile: String(data[i][ATTENDANCE_MOBILE_COL - 1] || '').trim()
       };
     }
   }
-  return { ok: false, error: 'Driver ID not found' };
+  return null;
 }
 
 // Vehicle No -> today's assigned driver, from the Attendance sheet. Matches
