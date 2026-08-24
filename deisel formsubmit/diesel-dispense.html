@@ -89,9 +89,26 @@
     background:rgba(255,255,255,.85);font-size:12px;font-weight:600;cursor:pointer;color:var(--ink);
     backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
   .list-toolbar button.active{background:var(--green);color:#fff;border-color:var(--green);}
+
+  .date-filter{display:flex;flex-wrap:wrap;align-items:end;gap:10px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--border);}
+  .df-field{display:flex;flex-direction:column;gap:4px;}
+  .df-field label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .df-field input{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;background:#fff;color:var(--ink);}
+  .df-field input:focus{outline:none;border-color:var(--green);}
+  .df-btn{padding:9px 14px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.7);
+    font-size:13px;font-weight:600;cursor:pointer;color:var(--ink);}
+  .df-clear{background:none;border:none;color:var(--orange-dark);}
+
+  .summary-bar{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;}
+  .summary-bar .stile{flex:1;min-width:90px;background:rgba(255,255,255,.85);border:1px solid var(--glass-border);border-top:3px solid var(--accent);
+    border-radius:10px;padding:8px 10px;}
+  .summary-bar .stile .snum{font-size:16px;font-weight:800;color:var(--ink);}
+  .summary-bar .stile .slabel{font-size:9px;color:var(--muted);margin-top:1px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;}
+
   /* Touch targets 44px on mobile (Apple/Google minimum recommendation) */
   @media (max-width:640px){
     .list-toolbar button{padding:11px 16px;font-size:14px;min-height:44px;}
+    .df-field input,.df-btn{min-height:44px;font-size:14px;}
     .list-toggle{padding:14px 16px;min-height:48px;}
     .req-card-head{padding:14px 16px;}
   }
@@ -247,6 +264,15 @@
           <button class="list-filter active" data-status="Approved">Approved</button>
           <button class="list-filter" data-status="">All</button>
         </div>
+
+        <div class="date-filter">
+          <div class="df-field"><label>From</label><input type="date" id="dateFrom"></div>
+          <div class="df-field"><label>To</label><input type="date" id="dateTo"></div>
+          <button type="button" class="df-btn" id="dateToday">Today</button>
+          <button type="button" class="df-btn df-clear" id="dateClear">Clear</button>
+        </div>
+        <div class="summary-bar" id="summaryBar"></div>
+
         <div id="approvedList"></div>
       </div>
     </div>
@@ -517,12 +543,59 @@
 
   listSearch.addEventListener('input', function(){ applySearchAndRender(); });
 
+  /* ---------- Date filter: From/To (leave To blank for a single day) ---------- */
+  var dateFromInput = document.getElementById('dateFrom');
+  var dateToInput = document.getElementById('dateTo');
+  var summaryBar = document.getElementById('summaryBar');
+  [dateFromInput, dateToInput].forEach(function(el){
+    el.addEventListener('change', applySearchAndRender);
+  });
+  document.getElementById('dateToday').addEventListener('click', function(){
+    var t = toDateStr_(new Date());
+    dateFromInput.value = t;
+    dateToInput.value = t;
+    applySearchAndRender();
+  });
+  document.getElementById('dateClear').addEventListener('click', function(){
+    dateFromInput.value = '';
+    dateToInput.value = '';
+    applySearchAndRender();
+  });
+
+  function toDateStr_(d){
+    var y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+  function inDateFilter_(createdAt){
+    var from = dateFromInput.value, to = dateToInput.value;
+    if (!from && !to) return true;
+    var day = toDateStr_(new Date(createdAt));
+    var lo = from || to, hi = to || from;
+    return day >= lo && day <= hi;
+  }
+  function renderSummary(rows){
+    var liters = 0, amount = 0;
+    rows.forEach(function(r){
+      if (r.status === 'Dispensed') { liters += Number(r.actualLiters) || 0; amount += Number(r.amount) || 0; }
+    });
+    var tiles = [
+      { label: 'Requests', num: rows.length, accent: 'var(--green)' },
+      { label: 'Liters Dispensed', num: liters.toFixed(1), accent: '#d97706' },
+      { label: 'Amount Dispensed', num: '₹' + amount.toFixed(0), accent: '#059669' }
+    ];
+    summaryBar.innerHTML = tiles.map(function(t){
+      return '<div class="stile" style="--accent:' + t.accent + '"><div class="snum">' + t.num + '</div><div class="slabel">' + t.label + '</div></div>';
+    }).join('');
+  }
+
   function applySearchAndRender(){
     var q = listSearch.value.trim().toUpperCase();
     var rows = !q ? listRowsCache : listRowsCache.filter(function(r){
       return String(r.vehicleNo || '').toUpperCase().indexOf(q) !== -1 ||
              String(r.id || '').toUpperCase().indexOf(q) !== -1;
     });
+    if (dateFromInput.value || dateToInput.value) rows = rows.filter(function(r){ return inDateFilter_(r.createdAt); });
+    renderSummary(rows);
     renderApprovedList(rows);
   }
 
@@ -534,6 +607,7 @@
     var token = ++listRequestToken;
     var requestedStatus = listStatus;
     approvedList.innerHTML = '<div style="padding:10px;color:var(--muted);">Loading...</div>';
+    summaryBar.innerHTML = '';
     fetch(APPS_SCRIPT_URL + '?action=list&status=' + encodeURIComponent(requestedStatus))
       .then(function(r){ return r.json(); })
       .then(function(res){

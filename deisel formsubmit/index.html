@@ -67,6 +67,20 @@
   .ov-refresh{margin-left:auto;background:none !important;border:none !important;color:var(--gold) !important;}
   .ov-danger{background:rgba(220,38,38,.15) !important;border:1px solid rgba(220,38,38,.5) !important;color:#fca5a5 !important;}
   .ov-danger:active{background:rgba(220,38,38,.3) !important;}
+
+  .date-filter{display:flex;flex-wrap:wrap;align-items:end;gap:10px;margin-bottom:14px;
+    background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:14px;padding:12px 14px;
+    box-shadow:0 4px 16px rgba(16,19,46,.15);backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%);}
+  .df-field{display:flex;flex-direction:column;gap:4px;}
+  .df-field label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .df-field input{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;background:#fff;color:var(--ink);}
+  .df-field input:focus{outline:none;border-color:var(--orange);}
+  .df-btn{padding:9px 14px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.85);
+    font-size:13px;font-weight:600;cursor:pointer;color:var(--ink);}
+  .df-clear{background:none;border:none;color:var(--gold);}
+  @media (max-width:640px){
+    .df-field input, .df-btn{min-height:44px;font-size:14px;}
+  }
   .table-wrap{overflow-x:auto;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:16px;
     box-shadow:0 8px 32px rgba(16,19,46,.2);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);}
   table{width:100%;border-collapse:collapse;font-size:13px;min-width:840px;}
@@ -253,6 +267,13 @@
 
     <div class="section-title">📊 Overview — All Requests (Developer / Director view)</div>
 
+    <div class="date-filter">
+      <div class="df-field"><label>From</label><input type="date" id="dateFrom"></div>
+      <div class="df-field"><label>To</label><input type="date" id="dateTo"></div>
+      <button type="button" class="df-btn" id="dateToday">Today</button>
+      <button type="button" class="df-btn df-clear" id="dateClear">Clear</button>
+    </div>
+
     <div class="stats" id="statsRow"><div class="ov-loading">Loading...</div></div>
 
     <div class="ov-toolbar">
@@ -353,6 +374,45 @@
   });
   document.getElementById('ovRefresh').addEventListener('click', loadOverview);
 
+  /* ---------- Date filter: From/To (leave To blank for a single day) ---------- */
+  var dateFromInput = document.getElementById('dateFrom');
+  var dateToInput = document.getElementById('dateTo');
+
+  [dateFromInput, dateToInput].forEach(function(el){
+    el.addEventListener('change', function(){ renderStats(); renderTable(); });
+  });
+  document.getElementById('dateToday').addEventListener('click', function(){
+    var t = toDateStr_(new Date());
+    dateFromInput.value = t;
+    dateToInput.value = t;
+    renderStats();
+    renderTable();
+  });
+  document.getElementById('dateClear').addEventListener('click', function(){
+    dateFromInput.value = '';
+    dateToInput.value = '';
+    renderStats();
+    renderTable();
+  });
+
+  function toDateStr_(d){
+    var y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+  // True if createdAt's local date falls within [from, to] (inclusive). A
+  // single filled field (From or To only) filters to just that one day.
+  function inDateFilter_(createdAt){
+    var from = dateFromInput.value, to = dateToInput.value;
+    if (!from && !to) return true;
+    var day = toDateStr_(new Date(createdAt));
+    var lo = from || to, hi = to || from;
+    return day >= lo && day <= hi;
+  }
+  function dateFilteredRequests_(){
+    if (!dateFromInput.value && !dateToInput.value) return allRequests;
+    return allRequests.filter(function(r){ return inDateFilter_(r.createdAt); });
+  }
+
   function loadOverview(){
     if (!APPS_SCRIPT_URL) {
       statsRow.innerHTML = '<div class="ov-empty">⚠️ Setup pending: paste the APPS_SCRIPT_URL.</div>';
@@ -376,19 +436,24 @@
   }
 
   function renderStats(){
+    var visible = dateFilteredRequests_();
     var counts = { Pending: 0, Approved: 0, Rejected: 0, Dispensed: 0 };
-    var totalActualLiters = 0;
-    allRequests.forEach(function(r){
+    var totalActualLiters = 0, totalAmount = 0;
+    visible.forEach(function(r){
       counts[r.status] = (counts[r.status] || 0) + 1;
-      if (r.status === 'Dispensed') totalActualLiters += Number(r.actualLiters) || 0;
+      if (r.status === 'Dispensed') {
+        totalActualLiters += Number(r.actualLiters) || 0;
+        totalAmount += Number(r.amount) || 0;
+      }
     });
     var tiles = [
-      { label: 'Total Requests', num: allRequests.length, accent: 'var(--navy)' },
+      { label: 'Total Requests', num: visible.length, accent: 'var(--navy)' },
       { label: 'Pending', num: counts.Pending, accent: '#d97706' },
       { label: 'Approved', num: counts.Approved, accent: '#16a34a' },
       { label: 'Dispensed', num: counts.Dispensed, accent: '#1d4ed8' },
       { label: 'Rejected', num: counts.Rejected, accent: '#dc2626' },
-      { label: 'Liters Dispensed', num: totalActualLiters.toFixed(1), accent: 'var(--orange)' }
+      { label: 'Liters Dispensed', num: totalActualLiters.toFixed(1), accent: 'var(--orange)' },
+      { label: 'Amount Dispensed', num: '₹' + totalAmount.toFixed(0), accent: '#059669' }
     ];
     statsRow.innerHTML = tiles.map(function(t){
       return '<div class="stat-tile" style="--accent:' + t.accent + '"><div class="num">' + t.num + '</div><div class="label">' + t.label + '</div></div>';
@@ -396,7 +461,8 @@
   }
 
   function renderTable(){
-    var rows = ovStatus ? allRequests.filter(function(r){ return r.status === ovStatus; }) : allRequests;
+    var base = dateFilteredRequests_();
+    var rows = ovStatus ? base.filter(function(r){ return r.status === ovStatus; }) : base;
     if (!rows.length) { ovBody.innerHTML = '<tr><td colspan="12" class="ov-empty">No requests found.</td></tr>'; return; }
     ovBody.innerHTML = rows.map(function(r){
       // data-label shows a heading next to each value in the mobile card view
