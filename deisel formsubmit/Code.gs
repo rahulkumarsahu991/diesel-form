@@ -12,7 +12,7 @@
  * 1. Create a new Google Sheet in Google Drive (name: "Diesel Approval Data").
  * 2. Menu: Extensions > Apps Script
  * 3. Delete all the default code and paste this entire code in.
- * 4. Save (disk icon / Ctrl+S).
+ * 4. Save (disk icon / Ctrl+S).  
  * 5. Deploy > New deployment > gear icon > type: "Web app"
  *      - Description: Diesel approval backend
  *      - Execute as:  Me  (your account)
@@ -263,13 +263,30 @@ function findRow_(id) {
   return null;
 }
 
+// Next sequence number = (highest existing DSL### found in the sheet) + 1.
+// NOT row-count-based on purpose: if someone manually deletes a row (e.g.
+// cleaning up a test entry), a row-count-based scheme would reuse an ID
+// that's still sitting in a later row, producing duplicates. Scanning for
+// the actual max used number is immune to gaps from manual deletions.
+function nextRequestSeq_(sheet) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 1;
+  var ids = sheet.getRange(2, COL.ID, lastRow - 1, 1).getValues();
+  var maxSeq = 0;
+  for (var i = 0; i < ids.length; i++) {
+    var m = String(ids[i][0] || '').match(/^DSL(\d+)$/);
+    if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
+  }
+  return maxSeq + 1;
+}
+
 function createRequest_(body) {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
     var sheet = getSheet_();
     var nextRow = sheet.getLastRow() + 1;
-    var seq = nextRow - 1; // header is row1
+    var seq = nextRequestSeq_(sheet);
     var id = 'DSL' + pad_(seq, 3);
     var now = new Date();
 
@@ -290,6 +307,7 @@ function createRequest_(body) {
     row[COL.STATUS - 1] = 'Pending';
 
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
+    SpreadsheetApp.flush(); // make sure this write is visible before the lock releases
     return { ok: true, requestId: id };
   } finally {
     lock.releaseLock();
@@ -656,6 +674,47 @@ function resetAllRequests() {
   var count = lastRow - 1;
   sheet.deleteRows(2, count);
   Logger.log('Archived + deleted ' + count + ' rows. The next request will start from DSL001.');
+}
+
+/**********************************************************************
+ * ONE-TIME FIX: rename duplicate Request IDs (manual use only)
+ *
+ * If a row was ever manually deleted from "Requests", the old row-count-
+ * based ID generation could reuse an ID that a later row still had,
+ * producing two rows with the same Request ID. Run this once to fix it:
+ * for each duplicate, the FIRST (earliest, topmost) row keeps its ID —
+ * every later row with that same ID gets renamed to the next free DSL###
+ * number. Safe to run any time; does nothing if there are no duplicates.
+ *
+ * HOW TO RUN: Apps Script editor > function dropdown > "fixDuplicateRequestIds"
+ * > Run (▶) > check the execution log for what got renamed.
+ *********************************************************************/
+function fixDuplicateRequestIds() {
+  var sheet = getSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) { Logger.log('No data.'); return; }
+
+  var idRange = sheet.getRange(2, COL.ID, lastRow - 1, 1);
+  var ids = idRange.getValues();
+  var seen = {};
+  var renamed = [];
+  var nextSeq = null;
+
+  for (var i = 0; i < ids.length; i++) {
+    var idStr = String(ids[i][0] || '').trim();
+    if (!idStr) continue;
+    if (!seen[idStr]) {
+      seen[idStr] = true;
+      continue;
+    }
+    if (nextSeq === null) nextSeq = nextRequestSeq_(sheet);
+    var newId = 'DSL' + pad_(nextSeq, 3);
+    nextSeq++;
+    sheet.getRange(i + 2, COL.ID).setValue(newId);
+    renamed.push(idStr + ' -> ' + newId + ' (row ' + (i + 2) + ')');
+  }
+
+  Logger.log(renamed.length ? 'Renamed duplicate IDs:\n' + renamed.join('\n') : 'No duplicate IDs found.');
 }
 
 var ARCHIVE_SHEET_NAME = 'Archive';
