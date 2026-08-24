@@ -171,6 +171,12 @@
   .login-card input:focus{outline:none;border-color:var(--green);}
   .login-card button{width:100%;margin-top:6px;padding:12px;background:var(--green);color:#fff;border:none;border-radius:9px;
     font-size:15px;font-weight:700;cursor:pointer;}
+  .pw-wrap{position:relative;margin-bottom:10px;}
+  .pw-wrap input{margin-bottom:0 !important;padding-right:42px !important;}
+  button.pw-toggle{position:absolute;right:2px;top:50%;transform:translateY(-50%);width:auto !important;
+    margin:0 !important;padding:6px 10px !important;background:none !important;color:var(--muted);
+    font-size:17px;line-height:1;box-shadow:none !important;border:none !important;}
+  button.pw-toggle:active{background:none !important;}
   .login-err{margin-top:10px;font-size:13px;color:var(--red);font-weight:600;min-height:18px;}
   .shake{animation:shake .4s;}
   @keyframes shake{
@@ -207,7 +213,10 @@
       <p class="lsub">Stage 3 — Diesel Team Login</p>
       <form id="loginForm">
         <input type="text" id="loginUser" placeholder="User ID" autocomplete="username" autocapitalize="off">
-        <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password">
+        <div class="pw-wrap">
+          <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password">
+          <button type="button" class="pw-toggle" id="pwToggle" tabindex="-1" aria-label="Show password">👁️</button>
+        </div>
         <button type="submit">Login</button>
       </form>
       <div class="login-err" id="loginErr"></div>
@@ -316,6 +325,18 @@
         if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
         document.getElementById('loginPass').value = '';
       }
+    });
+  })();
+
+  /* ---------- Show/hide password toggle ---------- */
+  (function(){
+    var input = document.getElementById('loginPass');
+    var btn = document.getElementById('pwToggle');
+    btn.addEventListener('click', function(){
+      var show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.textContent = show ? '🙈' : '👁️';
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
     });
   })();
 

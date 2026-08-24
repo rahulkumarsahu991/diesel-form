@@ -191,6 +191,12 @@
   .login-card input:focus{outline:none;border-color:var(--orange);}
   .login-card button{width:100%;margin-top:6px;padding:12px;background:var(--orange);color:#fff;border:none;border-radius:9px;
     font-size:15px;font-weight:700;cursor:pointer;}
+  .pw-wrap{position:relative;margin-bottom:10px;}
+  .pw-wrap input{margin-bottom:0 !important;padding-right:42px !important;}
+  button.pw-toggle{position:absolute;right:2px;top:50%;transform:translateY(-50%);width:auto !important;
+    margin:0 !important;padding:6px 10px !important;background:none !important;color:var(--muted);
+    font-size:17px;line-height:1;box-shadow:none !important;border:none !important;flex:none !important;}
+  button.pw-toggle:active{background:none !important;}
   .login-err{margin-top:10px;font-size:13px;color:var(--red,#dc2626);font-weight:600;min-height:18px;}
   .shake{animation:shake .4s;}
   @keyframes shake{
@@ -228,7 +234,10 @@
       <p class="lsub">Director / Developer Login</p>
       <form id="loginForm">
         <input type="text" id="loginUser" placeholder="User ID" autocomplete="username" autocapitalize="off">
-        <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password">
+        <div class="pw-wrap">
+          <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password">
+          <button type="button" class="pw-toggle" id="pwToggle" tabindex="-1" aria-label="Show password">👁️</button>
+        </div>
         <button type="submit">Login</button>
       </form>
       <div class="login-err" id="loginErr"></div>
@@ -329,7 +338,10 @@
       <label>Your Name</label>
       <input type="text" id="cdName" placeholder="Your name" autocomplete="off">
       <label>Admin Password</label>
-      <input type="password" id="cdPassword" placeholder="Password" autocomplete="off">
+      <div class="pw-wrap">
+        <input type="password" id="cdPassword" placeholder="Password" autocomplete="off">
+        <button type="button" class="pw-toggle" id="cdPwToggle" tabindex="-1" aria-label="Show password">👁️</button>
+      </div>
       <div class="cd-err" id="cdErr"></div>
       <div class="cd-actions">
         <button type="button" id="cdCancel" class="cd-cancel">Cancel</button>
@@ -366,6 +378,19 @@
       }
     });
   })();
+
+  /* ---------- Show/hide password toggle (any 👁️ button) ---------- */
+  function setupPwToggle(inputEl, btnEl){
+    if (!inputEl || !btnEl) return;
+    btnEl.addEventListener('click', function(){
+      var show = inputEl.type === 'password';
+      inputEl.type = show ? 'text' : 'password';
+      btnEl.textContent = show ? '🙈' : '👁️';
+      btnEl.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    });
+  }
+  setupPwToggle(document.getElementById('loginPass'), document.getElementById('pwToggle'));
+  setupPwToggle(document.getElementById('cdPassword'), document.getElementById('cdPwToggle'));
 
   // Paste the /exec URL here after deploying the Google Apps Script "Web App"
   var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbybGePj0rLOxG_xdK-XjXtipxm_izdiozm9rgWbKTsY7L7XbFhSrzgs86JNCWvxO-0ipw/exec";
