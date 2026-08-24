@@ -3,10 +3,9 @@
  *
  * What it does: stores/updates the 3-stage workflow's data in a Google Sheet.
  *   Stage 1 (Calling Team)  -> create   -> new request, "Pending"
- *   Stage 2 (Manager)       -> approve/reject -> edit data and approve,
- *                               a 4-digit OTP is generated on approval
- *   Stage 3 (Diesel Team)   -> verify + dispense -> once the OTP matches,
- *                               "Dispensed" + a receipt number is generated
+ *   Stage 2 (Manager)       -> approve/reject -> edit data and approve
+ *   Stage 3 (Diesel Team)   -> verify + dispense -> "Dispensed" + a receipt
+ *                               number is generated
  *
  * ===================  SETUP (one time)  ===========================
  * 1. Create a new Google Sheet in Google Drive (name: "Diesel Approval Data").
@@ -324,7 +323,6 @@ function approveRequest_(body) {
       return { ok: false, error: 'This request is already "' + found.values[COL.STATUS - 1] + '"' };
     }
     var sheet = getSheet_();
-    var otp = String(Math.floor(1000 + Math.random() * 9000));
 
     // The Manager can edit and overwrite these (vehicle/driver/route/pump/liters)
     if (body.vehicleNo) sheet.getRange(found.rowIndex, COL.VEHICLE).setValue(body.vehicleNo);
@@ -337,10 +335,11 @@ function approveRequest_(body) {
     sheet.getRange(found.rowIndex, COL.MGR_NAME).setValue(body.managerName || '');
     sheet.getRange(found.rowIndex, COL.APPROVED_LITERS).setValue(Number(body.approvedLiters) || 0);
     sheet.getRange(found.rowIndex, COL.MGR_REMARKS).setValue(body.managerRemarks || '');
-    sheet.getRange(found.rowIndex, COL.OTP).setValue(otp);
+    // Column P (OTP) is left blank on purpose — no longer auto-generated,
+    // filled in manually if ever needed.
     sheet.getRange(found.rowIndex, COL.APPROVED_AT).setValue(new Date());
 
-    return { ok: true, otp: otp, requestId: body.id };
+    return { ok: true, requestId: body.id };
   } finally {
     lock.releaseLock();
   }
