@@ -104,6 +104,10 @@
   .status-Rejected{background:#fee2e2;color:#dc2626;}
   .status-Dispensed{background:#dbeafe;color:#1d4ed8;}
   .ov-empty,.ov-loading{padding:30px;text-align:center;color:var(--muted);}
+  .del-cell{text-align:center;}
+  .row-del-btn{background:rgba(220,38,38,.12);border:1px solid rgba(220,38,38,.4);color:#dc2626;
+    border-radius:6px;width:26px;height:26px;font-size:13px;font-weight:700;cursor:pointer;line-height:1;}
+  .row-del-btn:active{background:rgba(220,38,38,.25);}
 
   .vo-panel{margin:0 0 20px;}
   .vo-title{font-size:15px;font-weight:800;color:#fff;margin-bottom:10px;text-shadow:0 1px 3px rgba(0,0,0,.4);}
@@ -167,6 +171,11 @@
       text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
     .table-wrap td.ov-empty,.table-wrap td.ov-loading{display:block;text-align:center;}
     .table-wrap td.ov-empty::before,.table-wrap td.ov-loading::before{content:none;}
+    /* Delete button stays visible even when the card is collapsed */
+    .table-wrap td.del-cell{display:block !important;position:absolute;bottom:10px;right:12px;
+      padding:0;border-bottom:none;width:auto;}
+    .table-wrap td.del-cell::before{content:none;}
+    .row-del-btn{width:30px;height:30px;font-size:15px;}
     /* Touch targets 44px (Apple/Google minimum recommendation) */
     .ov-toolbar button{padding:11px 16px;font-size:14px;min-height:44px;}
     .vo-title{font-size:13px;}
@@ -312,10 +321,10 @@
           <tr>
             <th>Request ID</th><th>Date</th><th>Vehicle</th><th>Odometer (KM)</th><th>Driver</th><th>Status</th>
             <th>Req. Liters</th><th>Appr. Liters</th><th>Actual Liters</th>
-            <th>Requested By</th><th>Manager</th><th>Dispensed By</th>
+            <th>Requested By</th><th>Manager</th><th>Dispensed By</th><th></th>
           </tr>
         </thead>
-        <tbody id="ovBody"><tr><td colspan="12" class="ov-loading">Loading...</td></tr></tbody>
+        <tbody id="ovBody"><tr><td colspan="13" class="ov-loading">Loading...</td></tr></tbody>
       </table>
     </div>
 
@@ -346,6 +355,21 @@
       <div class="cd-actions">
         <button type="button" id="cdCancel" class="cd-cancel">Cancel</button>
         <button type="button" id="cdConfirm" class="cd-confirm">Yes, Clear Everything</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="deleteReqOverlay" class="cd-overlay">
+    <div class="cd-modal">
+      <div class="cd-icon">🗑️</div>
+      <h3>Delete Request</h3>
+      <p>This permanently deletes request <b id="delIdLabel"></b> from the sheet. This cannot be undone.</p>
+      <label>Your Name</label>
+      <input type="text" id="delName" placeholder="Your name" autocomplete="off">
+      <div class="cd-err" id="delErr"></div>
+      <div class="cd-actions">
+        <button type="button" id="delCancel" class="cd-cancel">Cancel</button>
+        <button type="button" id="delConfirm" class="cd-confirm">Yes, Delete</button>
       </div>
     </div>
   </div>
@@ -455,11 +479,11 @@
       ovBody.innerHTML = '';
       return;
     }
-    ovBody.innerHTML = '<tr><td colspan="12" class="ov-loading">Loading...</td></tr>';
+    ovBody.innerHTML = '<tr><td colspan="13" class="ov-loading">Loading...</td></tr>';
     fetch(APPS_SCRIPT_URL + '?action=list')
       .then(function(r){ return r.json(); })
       .then(function(res){
-        if (!res.ok) { ovBody.innerHTML = '<tr><td colspan="12" class="ov-empty">Error: ' + esc(res.error) + '</td></tr>'; return; }
+        if (!res.ok) { ovBody.innerHTML = '<tr><td colspan="13" class="ov-empty">Error: ' + esc(res.error) + '</td></tr>'; return; }
         allRequests = res.rows;
         renderStats();
         renderTable();
@@ -467,7 +491,7 @@
         renderVehicleOverview();
       })
       .catch(function(err){
-        ovBody.innerHTML = '<tr><td colspan="12" class="ov-empty">Network error: ' + esc(err.message) + '</td></tr>';
+        ovBody.innerHTML = '<tr><td colspan="13" class="ov-empty">Network error: ' + esc(err.message) + '</td></tr>';
       });
   }
 
@@ -499,7 +523,7 @@
   function renderTable(){
     var base = dateFilteredRequests_();
     var rows = ovStatus ? base.filter(function(r){ return r.status === ovStatus; }) : base;
-    if (!rows.length) { ovBody.innerHTML = '<tr><td colspan="12" class="ov-empty">No requests found.</td></tr>'; return; }
+    if (!rows.length) { ovBody.innerHTML = '<tr><td colspan="13" class="ov-empty">No requests found.</td></tr>'; return; }
     ovBody.innerHTML = rows.map(function(r){
       // data-label shows a heading next to each value in the mobile card view
       return '<tr>' +
@@ -515,17 +539,66 @@
         '<td data-label="Requested By">' + esc(r.requestedBy) + '</td>' +
         '<td data-label="Manager">' + esc(r.managerName || '-') + '</td>' +
         '<td data-label="Dispensed By">' + esc(r.dispensedBy || '-') + '</td>' +
+        '<td class="del-cell"><button type="button" class="row-del-btn" data-id="' + esc(r.id) + '" title="Delete this request">✕</button></td>' +
       '</tr>';
     }).join('');
   }
 
   // Mobile card view: row starts collapsed (summary only), tap to expand full details
   ovBody.addEventListener('click', function(e){
+    var delBtn = e.target.closest('.row-del-btn');
+    if (delBtn) { openDeleteModal_(delBtn.getAttribute('data-id')); return; }
     var tr = e.target.closest('tr');
     if (!tr || tr.parentNode !== ovBody || !tr.querySelector('td.vsum')) return;
     var wasOpen = tr.classList.contains('expanded');
     ovBody.querySelectorAll('tr.expanded').forEach(function(el){ el.classList.remove('expanded'); });
     if (!wasOpen) tr.classList.add('expanded');
+  });
+
+  /* ---------- Delete a single request (Admin/Director only) ---------- */
+  var delOverlay = document.getElementById('deleteReqOverlay');
+  var delName = document.getElementById('delName');
+  var delErr = document.getElementById('delErr');
+  var delCancel = document.getElementById('delCancel');
+  var delConfirm = document.getElementById('delConfirm');
+  var delIdLabel = document.getElementById('delIdLabel');
+  var pendingDeleteId = null;
+
+  function openDeleteModal_(id){
+    pendingDeleteId = id;
+    delIdLabel.textContent = id;
+    delName.value = '';
+    delErr.textContent = '';
+    delOverlay.classList.add('show');
+    delName.focus();
+  }
+  delCancel.addEventListener('click', function(){ delOverlay.classList.remove('show'); });
+  delOverlay.addEventListener('click', function(e){ if (e.target === delOverlay) delOverlay.classList.remove('show'); });
+
+  delConfirm.addEventListener('click', function(){
+    var name = delName.value.trim();
+    delErr.textContent = '';
+    if (!name) { delErr.textContent = 'Enter your name.'; delName.focus(); return; }
+    if (!APPS_SCRIPT_URL) { delErr.textContent = 'Setup pending: paste the APPS_SCRIPT_URL.'; return; }
+
+    delConfirm.disabled = true;
+    delConfirm.textContent = 'Deleting...';
+    fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'deleteRequest', id: pendingDeleteId, deletedBy: name })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if (!res.ok) { delErr.textContent = '❌ ' + res.error; return; }
+      delOverlay.classList.remove('show');
+      loadOverview();
+    })
+    .catch(function(err){ delErr.textContent = '❌ Network error: ' + err.message; })
+    .finally(function(){
+      delConfirm.disabled = false;
+      delConfirm.textContent = 'Yes, Delete';
+    });
   });
 
   /* ---------- Vehicle-wise Overview (OTP count / last dispensed) ---------- */

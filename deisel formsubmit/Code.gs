@@ -135,6 +135,7 @@ function doPost(e) {
     if (action === 'reject') return jsonOut_(rejectRequest_(body));
     if (action === 'dispense') return jsonOut_(dispenseRequest_(body));
     if (action === 'clearAllData') return jsonOut_(clearAllData_(body));
+    if (action === 'deleteRequest') return jsonOut_(deleteRequestRow_(body));
     return jsonOut_({ ok: false, error: 'Unknown action' });
   } catch (err) {
     return jsonOut_({ ok: false, error: err.message });
@@ -762,6 +763,27 @@ function clearAllData_(body) {
     sheet.deleteRows(2, count);
     Logger.log('All data cleared via web app by "' + (body.clearedBy || 'unknown') + '". Archived + deleted ' + count + ' rows. Next request starts at DSL001.');
     return { ok: true, deletedCount: count };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Deletes a single request row directly, no archive — used by the
+// Director/Admin panel's per-row "✕" delete button. Only asks for a name
+// (for the audit log), no password: the page is already behind the
+// Admin login, so this isn't a second security gate like clearAllData_,
+// just a lighter-weight confirmation for a single-row action.
+function deleteRequestRow_(body) {
+  if (!body.id) return { ok: false, error: 'Provide a Request ID' };
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var found = findRow_(body.id);
+    if (!found) return { ok: false, error: 'Request ID not found' };
+    var sheet = getSheet_();
+    sheet.deleteRow(found.rowIndex);
+    Logger.log('Request ' + body.id + ' deleted via web app by "' + (body.deletedBy || 'unknown') + '".');
+    return { ok: true };
   } finally {
     lock.releaseLock();
   }
