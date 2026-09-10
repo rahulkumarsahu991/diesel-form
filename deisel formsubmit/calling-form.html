@@ -563,11 +563,9 @@
     navigator.geolocation.getCurrentPosition(function(pos){
       var lat = pos.coords.latitude.toFixed(5);
       var lon = pos.coords.longitude.toFixed(5);
-      currentLocationInput.value = lat + ', ' + lon;
-      locationInfo.className = 'driver-info ok';
-      locationInfo.textContent = '✅ Location found (copy for a map link: https://maps.google.com/?q=' + lat + ',' + lon + ')';
-      useLocationBtn.disabled = false;
-      useLocationBtn.textContent = '📍 Use My Location';
+      locationInfo.className = 'driver-info loading';
+      locationInfo.textContent = 'Finding nearby place name...';
+      reverseGeocodeLocation_(lat, lon);
     }, function(err){
       locationInfo.className = 'driver-info err';
       locationInfo.textContent = '❌ Could not get location (' + err.message + ') — please type it manually.';
@@ -575,6 +573,29 @@
       useLocationBtn.textContent = '📍 Use My Location';
     }, { enableHighAccuracy: true, timeout: 10000 });
   });
+
+  // Turns raw GPS coordinates into a readable place name (nearest village/
+  // town/city, road, etc.) via OpenStreetMap Nominatim's reverse-geocoding —
+  // same free service already used for the place-search suggestions above.
+  function reverseGeocodeLocation_(lat, lon){
+    fetch('https://nominatim.openstreetmap.org/reverse?format=json&zoom=15&lat=' + lat + '&lon=' + lon)
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        var placeName = (res && res.display_name) ? res.display_name : (lat + ', ' + lon);
+        currentLocationInput.value = placeName;
+        locationInfo.className = 'driver-info ok';
+        locationInfo.textContent = '✅ Location found: ' + placeName;
+      })
+      .catch(function(){
+        currentLocationInput.value = lat + ', ' + lon;
+        locationInfo.className = 'driver-info ok';
+        locationInfo.textContent = '✅ Got coordinates, but place-name lookup failed: ' + lat + ', ' + lon;
+      })
+      .finally(function(){
+        useLocationBtn.disabled = false;
+        useLocationBtn.textContent = '📍 Use My Location';
+      });
+  }
 
   /* ---------- Driver ID -> auto-fetch Name + Mobile ---------- */
   var driverIdInput = document.getElementById('driverId');
