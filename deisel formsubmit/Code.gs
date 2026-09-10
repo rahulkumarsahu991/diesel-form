@@ -174,6 +174,10 @@ function getOfficeSheet_() {
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
     sheet.setFrozenRows(1);
+    // Office/Tanker skips the approval stage entirely — the OTP column is
+    // never used here, so hide it (not deleted, to keep the same column
+    // layout/indices as "Requests" — just out of sight).
+    sheet.hideColumns(COL.OTP);
   }
   return sheet;
 }
@@ -834,6 +838,18 @@ function fixDuplicateRequestIds() {
   }
 
   Logger.log(renamed.length ? 'Renamed duplicate IDs:\n' + renamed.join('\n') : 'No duplicate IDs found.');
+}
+
+/**********************************************************************
+ * ONE-TIME: hide the unused OTP column on an Office-Tanker sheet that
+ * already existed before this hide-on-create logic was added.
+ * HOW TO RUN: Apps Script editor > function dropdown > "hideOfficeOtpColumn"
+ * > Run (▶). Safe to run more than once.
+ *********************************************************************/
+function hideOfficeOtpColumn() {
+  var sheet = getOfficeSheet_(); // creates the tab if it doesn't exist yet
+  sheet.hideColumns(COL.OTP);
+  Logger.log('Column ' + COL.OTP + ' (OTP) hidden on the "' + OFFICE_SHEET_NAME + '" tab.');
 }
 
 var ARCHIVE_SHEET_NAME = 'Archive';
