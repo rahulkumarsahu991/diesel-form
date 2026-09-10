@@ -68,10 +68,10 @@ var ROUTE_TO_COL = 4;   // Column D
 // Attendance sheet: Vehicle No -> today's on-duty Driver ID/Name/Mobile.
 // Layout: Col A=Sl No, B=Driver ID, C=Driver Name, D=Mobile, then a pair of
 // columns per day of the month starting at E (Vehicle No that day, then
-// TRUE/FALSE present). NOTE: tab name is month-specific ("Attendance Aug") —
+// TRUE/FALSE present). NOTE: tab name is month-specific ("Attendance Sep") —
 // update ATTENDANCE_SHEET_NAME each month, or this lookup silently finds nothing.
 var ATTENDANCE_SHEET_ID = '1wgG2K9phHMQPvIskvXF1OBHxNHFk8pegrKCi0hvuF6U';
-var ATTENDANCE_SHEET_NAME = 'Attendance Aug';
+var ATTENDANCE_SHEET_NAME = 'Attendance Sep';
 var ATTENDANCE_ID_COL = 2;     // Column B
 var ATTENDANCE_NAME_COL = 3;   // Column C
 var ATTENDANCE_MOBILE_COL = 4; // Column D
