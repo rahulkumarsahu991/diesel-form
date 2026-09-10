@@ -287,11 +287,18 @@
           <div class="sub">Select from Approved requests, dispense + receipt</div>
         </div>
       </a>
+      <a class="link-card" href="office-form.html" target="_blank" rel="noopener" style="--accent:#7c3aed;">
+        <span class="emoji">🏭</span>
+        <div>
+          <div class="title">Office Pump/Tanker Form</div>
+          <div class="sub">Goes straight to the Diesel Team — no manager step</div>
+        </div>
+      </a>
     </div>
 
     <div class="note">
       <b>⚠️ Share only each team's own link with them</b>
-      Give the Calling team only calling-form.html, the Manager only manager-approval.html, and the Diesel team only diesel-dispense.html — this page (index.html) is for your reference only.
+      Give the Calling team only calling-form.html, the Manager only manager-approval.html, the Diesel team only diesel-dispense.html, and the Office/Tanker team only office-form.html — this page (index.html) is for your reference only.
     </div>
 
     <div class="section-title">📊 Overview — All Requests (Developer / Director view)</div>
@@ -343,7 +350,7 @@
     <div class="cd-modal">
       <div class="cd-icon">⚠️</div>
       <h3>Clear All Data</h3>
-      <p>This clears <b>every request</b> from the active list. A copy of everything is saved to the <b>"Archive"</b> tab in the Google Sheet first, so nothing is actually lost. The next new request will start again from <b>DSL001</b>.</p>
+      <p>This clears <b>every request</b> from both the "Requests" and "Office-Tanker" sheets. A copy of everything is saved to the <b>"Archive"</b> tab first, so nothing is actually lost. The next new requests will start again from <b>DSL001</b> / <b>OT001</b>.</p>
       <label>Your Name</label>
       <input type="text" id="cdName" placeholder="Your name" autocomplete="off">
       <label>Admin Password</label>
@@ -480,7 +487,7 @@
       return;
     }
     ovBody.innerHTML = '<tr><td colspan="13" class="ov-loading">Loading...</td></tr>';
-    fetch(APPS_SCRIPT_URL + '?action=list')
+    fetch(APPS_SCRIPT_URL + '?action=list&source=all')
       .then(function(r){ return r.json(); })
       .then(function(res){
         if (!res.ok) { ovBody.innerHTML = '<tr><td colspan="13" class="ov-empty">Error: ' + esc(res.error) + '</td></tr>'; return; }

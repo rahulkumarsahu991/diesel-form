@@ -35,6 +35,7 @@
  *********************************************************************/
 
 var SHEET_NAME = 'Requests';
+var OFFICE_SHEET_NAME = 'Office-Tanker'; // Office Pump/Tanker Distribution Form — separate tab, IDs prefixed "OT"
 var TIMEZONE = 'Asia/Kolkata';
 
 // Gate for the "Clear All Data" button on index.html (Director/Developer view only).
@@ -100,7 +101,7 @@ function doGet(e) {
   try {
     var action = e && e.parameter ? e.parameter.action : '';
     var p = (e && e.parameter) ? e.parameter : {};
-    if (action === 'list') return jsonOut_(listRequests_(p.status || '', p.by || '', p.limit || ''));
+    if (action === 'list') return jsonOut_(listRequests_(p.status || '', p.by || '', p.limit || '', p.source || ''));
     if (action === 'verify') return jsonOut_(checkApproved_(p.id));
     if (action === 'get') return jsonOut_(getRequest_(p.id));
     if (action === 'vehicles') return jsonOut_(listVehicles_());
@@ -131,6 +132,7 @@ function doPost(e) {
     var body = JSON.parse(e.postData.contents);
     var action = body.action;
     if (action === 'create') return jsonOut_(createRequest_(body));
+    if (action === 'createOffice') return jsonOut_(createOfficeRequest_(body));
     if (action === 'approve') return jsonOut_(approveRequest_(body));
     if (action === 'reject') return jsonOut_(rejectRequest_(body));
     if (action === 'dispense') return jsonOut_(dispenseRequest_(body));
@@ -158,6 +160,27 @@ function getSheet_() {
     sheet.setFrozenRows(1);
   }
   return sheet;
+}
+
+// Office Pump/Tanker Distribution Form's own tab — same column layout as
+// "Requests" (reuses HEADERS/COL), kept separate per the user's request so
+// office/tanker fills don't mix into the main Requests sheet.
+function getOfficeSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(OFFICE_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(OFFICE_SHEET_NAME);
+  }
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+// Which sheet a Request ID lives in, based on its "OT" vs "DSL" prefix.
+function sheetForId_(id) {
+  return /^OT/i.test(String(id || '')) ? getOfficeSheet_() : getSheet_();
 }
 
 function rowToObj_(row) {
@@ -190,16 +213,35 @@ function rowToObj_(row) {
   };
 }
 
-// status  — only rows with this status ('' = all)
-// by      — only rows with this "Requested By" name ('' = all)
-// limit   — max rows to send back ('' = all). Filtering happens on the
-//           server so the whole sheet doesn't need to be downloaded for large data.
-function listRequests_(status, by, limit) {
-  var sheet = getSheet_();
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { ok: true, rows: [] };
-  var data = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
+// status — only rows with this status ('' = all)
+// by     — only rows with this "Requested By" name ('' = all)
+// limit  — max rows to send back ('' = all)
+// source — which sheet(s) to read:
+//            ''       -> "Requests" only (default — Manager's view; Office/
+//                        Tanker requests skip Manager entirely, so they
+//                        must never show up there)
+//            'office' -> "Office-Tanker" only (the Office form's own
+//                        "My Requests" section)
+//            'all'    -> both, merged (Director Overview, Diesel Team's list)
+function listRequests_(status, by, limit, source) {
+  var rows;
+  if (source === 'office') {
+    rows = readRequestRows_(getOfficeSheet_(), status, by);
+  } else if (source === 'all') {
+    rows = readRequestRows_(getSheet_(), status, by).concat(readRequestRows_(getOfficeSheet_(), status, by));
+  } else {
+    rows = readRequestRows_(getSheet_(), status, by);
+  }
+  rows.sort(function(a, b){ return new Date(b.createdAt) - new Date(a.createdAt); }); // newest first
   var max = Number(limit) || 0;
+  if (max && rows.length > max) rows = rows.slice(0, max);
+  return { ok: true, rows: rows };
+}
+
+function readRequestRows_(sheet, status, by) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var data = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
   var byNorm = String(by || '').trim().toUpperCase();
   var rows = [];
   for (var i = data.length - 1; i >= 0; i--) { // newest first
@@ -208,21 +250,29 @@ function listRequests_(status, by, limit) {
     if (status && String(r[COL.STATUS - 1]) !== status) continue;
     if (byNorm && String(r[COL.REQ_BY - 1] || '').trim().toUpperCase() !== byNorm) continue;
     rows.push(rowToObj_(r));
-    if (max && rows.length >= max) break;
   }
-  return { ok: true, rows: rows };
+  return rows;
 }
 
-// Last N dispensed entries for a vehicle — for the calling form's refuel history.
-// Filtered/trimmed on the server instead of downloading the whole list.
+// Last N dispensed entries for a vehicle — for the calling/office form's
+// refuel history. Merges both sheets, since a vehicle can be fueled via
+// either form. Filtered/trimmed on the server instead of downloading
+// the whole list.
 function vehicleHistory_(vehicle, limit) {
   if (!vehicle) return { ok: false, error: 'Provide a Vehicle No' };
-  var sheet = getSheet_();
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { ok: true, rows: [] };
-  var data = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
   var target = String(vehicle).trim().toUpperCase();
   var max = Number(limit) || 5;
+  var rows = readVehicleHistoryRows_(getSheet_(), target).concat(readVehicleHistoryRows_(getOfficeSheet_(), target));
+  // Row order != dispense order (an older request can still be dispensed later),
+  // so we sort by actual dispense time before taking the latest N.
+  rows.sort(function(a, b){ return new Date(b.dispensedAt) - new Date(a.dispensedAt); });
+  return { ok: true, rows: rows.slice(0, max) };
+}
+
+function readVehicleHistoryRows_(sheet, target) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var data = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
   var rows = [];
   for (var i = 0; i < data.length; i++) {
     var r = data[i];
@@ -238,10 +288,7 @@ function vehicleHistory_(vehicle, limit) {
       amount: r[COL.AMOUNT - 1]
     });
   }
-  // Row order != dispense order (an older request can still be dispensed later),
-  // so we sort by actual dispense time before taking the latest N.
-  rows.sort(function(a, b){ return new Date(b.dispensedAt) - new Date(a.dispensedAt); });
-  return { ok: true, rows: rows.slice(0, max) };
+  return rows;
 }
 
 function getRequest_(id) {
@@ -250,14 +297,17 @@ function getRequest_(id) {
   return { ok: true, row: rowToObj_(found.values) };
 }
 
+// Routes to the correct sheet (Requests vs Office-Tanker) based on the ID's
+// prefix — returned `sheet` MUST be used for any write against this row,
+// never a fresh getSheet_(), or the write lands in the wrong tab entirely.
 function findRow_(id) {
-  var sheet = getSheet_();
+  var sheet = sheetForId_(id);
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
   var data = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
   for (var i = 0; i < data.length; i++) {
     if (String(data[i][COL.ID - 1]) === String(id)) {
-      return { rowIndex: i + 2, values: data[i] };
+      return { rowIndex: i + 2, values: data[i], sheet: sheet };
     }
   }
   return null;
@@ -314,7 +364,65 @@ function createRequest_(body) {
   }
 }
 
+// Same idea as nextRequestSeq_() but scans for the highest OT### used.
+function nextOfficeRequestSeq_(sheet) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 1;
+  var ids = sheet.getRange(2, COL.ID, lastRow - 1, 1).getValues();
+  var maxSeq = 0;
+  for (var i = 0; i < ids.length; i++) {
+    var m = String(ids[i][0] || '').match(/^OT(\d+)$/);
+    if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
+  }
+  return maxSeq + 1;
+}
+
+// Office Pump/Tanker Distribution Form's submit handler. Unlike createRequest_,
+// this skips the Manager stage entirely — the row is written straight in as
+// "Approved" (Approved Liters = the liters filled) so it shows up right away
+// in the Diesel Team's ready-to-dispense list.
+function createOfficeRequest_(body) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sheet = getOfficeSheet_();
+    var nextRow = sheet.getLastRow() + 1;
+    var seq = nextOfficeRequestSeq_(sheet);
+    var id = 'OT' + pad_(seq, 3);
+    var now = new Date();
+    var liters = Number(body.requestedLiters) || 0;
+
+    var row = [];
+    row[COL.ID - 1] = id;
+    row[COL.CREATED_AT - 1] = now;
+    row[COL.VEHICLE - 1] = body.vehicleNo || '';
+    row[COL.DRIVER_ID - 1] = body.driverId || '';
+    row[COL.DRIVER - 1] = body.driverName || '';
+    row[COL.ROUTE - 1] = body.routeTrip || '';
+    row[COL.CURRENT_LOCATION - 1] = body.currentLocation || '';
+    row[COL.ODOMETER - 1] = Number(body.odometerKm) || 0;
+    row[COL.PUMP - 1] = body.pumpLocation || '';
+    row[COL.REQ_LITERS - 1] = liters;
+    row[COL.REQ_BY - 1] = body.requestedBy || '';
+    row[COL.CONTACT - 1] = body.contactNumber || '';
+    row[COL.CALL_REMARKS - 1] = body.callingRemarks || '';
+    row[COL.STATUS - 1] = 'Approved';
+    row[COL.MGR_NAME - 1] = 'Office/Tanker (direct)';
+    row[COL.APPROVED_LITERS - 1] = liters;
+    row[COL.APPROVED_AT - 1] = now;
+
+    sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
+    SpreadsheetApp.flush();
+    return { ok: true, requestId: id };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function approveRequest_(body) {
+  if (/^OT/i.test(body.id || '')) {
+    return { ok: false, error: 'Office/Tanker requests go straight to the Diesel Team — no manager approval needed.' };
+  }
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -323,7 +431,7 @@ function approveRequest_(body) {
     if (found.values[COL.STATUS - 1] !== 'Pending') {
       return { ok: false, error: 'This request is already "' + found.values[COL.STATUS - 1] + '"' };
     }
-    var sheet = getSheet_();
+    var sheet = found.sheet;
 
     // The Manager can edit and overwrite these (vehicle/driver/route/pump/liters)
     if (body.vehicleNo) sheet.getRange(found.rowIndex, COL.VEHICLE).setValue(body.vehicleNo);
@@ -347,6 +455,9 @@ function approveRequest_(body) {
 }
 
 function rejectRequest_(body) {
+  if (/^OT/i.test(body.id || '')) {
+    return { ok: false, error: 'Office/Tanker requests go straight to the Diesel Team — nothing to reject here.' };
+  }
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -355,7 +466,7 @@ function rejectRequest_(body) {
     if (found.values[COL.STATUS - 1] !== 'Pending') {
       return { ok: false, error: 'This request is already "' + found.values[COL.STATUS - 1] + '"' };
     }
-    var sheet = getSheet_();
+    var sheet = found.sheet;
     sheet.getRange(found.rowIndex, COL.STATUS).setValue('Rejected');
     sheet.getRange(found.rowIndex, COL.MGR_NAME).setValue(body.managerName || '');
     sheet.getRange(found.rowIndex, COL.MGR_REMARKS).setValue(body.managerRemarks || '');
@@ -375,7 +486,7 @@ function checkApproved_(id) {
     return { ok: false, error: 'This diesel has already been dispensed' };
   }
   if (found.values[COL.STATUS - 1] !== 'Approved') {
-    return { ok: false, error: 'This request has not been "Approved" by the manager yet (status: ' + found.values[COL.STATUS - 1] + ')' };
+    return { ok: false, error: 'This request is not "Approved" yet (status: ' + found.values[COL.STATUS - 1] + ')' };
   }
   return { ok: true, row: rowToObj_(found.values) };
 }
@@ -388,7 +499,7 @@ function dispenseRequest_(body) {
     if (!check.ok) return check;
 
     var found = findRow_(body.id);
-    var sheet = getSheet_();
+    var sheet = found.sheet;
     var receiptNo = 'RCPT-' + Utilities.formatDate(new Date(), TIMEZONE, 'yyMMdd-HHmmss');
 
     // Actual liters = Approved Liters (manager-fixed quantity) — the diesel team
@@ -664,16 +775,24 @@ function fillEmpty_(row) {
  * The next request will start again from DSL001.
  *********************************************************************/
 function resetAllRequests() {
-  var sheet = getSheet_();
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) {
-    Logger.log('Sheet is already empty — nothing to delete.');
+  var count = archiveAndClearSheet_(getSheet_(), 'manual editor run');
+  count += archiveAndClearSheet_(getOfficeSheet_(), 'manual editor run');
+  if (count === 0) {
+    Logger.log('Both sheets are already empty — nothing to delete.');
     return;
   }
-  archiveRequests_(sheet, 'manual editor run');
+  Logger.log('Archived + deleted ' + count + ' rows total (Requests + Office-Tanker). Next requests start at DSL001 / OT001.');
+}
+
+// Shared by resetAllRequests()/clearAllData_(): archives every row in the
+// given sheet, then deletes them. Returns how many rows were cleared.
+function archiveAndClearSheet_(sheet, clearedBy) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+  archiveRequests_(sheet, clearedBy);
   var count = lastRow - 1;
   sheet.deleteRows(2, count);
-  Logger.log('Archived + deleted ' + count + ' rows. The next request will start from DSL001.');
+  return count;
 }
 
 /**********************************************************************
@@ -755,13 +874,9 @@ function clearAllData_(body) {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    var sheet = getSheet_();
-    var lastRow = sheet.getLastRow();
-    if (lastRow < 2) return { ok: true, deletedCount: 0 };
-    archiveRequests_(sheet, body.clearedBy);
-    var count = lastRow - 1;
-    sheet.deleteRows(2, count);
-    Logger.log('All data cleared via web app by "' + (body.clearedBy || 'unknown') + '". Archived + deleted ' + count + ' rows. Next request starts at DSL001.');
+    var count = archiveAndClearSheet_(getSheet_(), body.clearedBy);
+    count += archiveAndClearSheet_(getOfficeSheet_(), body.clearedBy);
+    Logger.log('All data cleared via web app by "' + (body.clearedBy || 'unknown') + '". Archived + deleted ' + count + ' rows total (Requests + Office-Tanker). Next requests start at DSL001 / OT001.');
     return { ok: true, deletedCount: count };
   } finally {
     lock.releaseLock();
@@ -780,8 +895,7 @@ function deleteRequestRow_(body) {
   try {
     var found = findRow_(body.id);
     if (!found) return { ok: false, error: 'Request ID not found' };
-    var sheet = getSheet_();
-    sheet.deleteRow(found.rowIndex);
+    found.sheet.deleteRow(found.rowIndex);
     Logger.log('Request ' + body.id + ' deleted via web app by "' + (body.deletedBy || 'unknown') + '".');
     return { ok: true };
   } finally {

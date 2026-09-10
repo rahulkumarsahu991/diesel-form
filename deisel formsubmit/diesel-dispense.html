@@ -131,6 +131,8 @@
   .req-card-head:active{background:rgba(22,163,74,.12);}
   .req-card .rc-id{font-weight:800;color:var(--navy);font-size:14px;}
   .req-card .rc-meta{font-size:12px;color:var(--muted);margin-top:3px;}
+  .rc-source-tag{display:inline-block;margin-top:5px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;
+    background:rgba(139,58,183,.14);color:#7c3aed;text-transform:uppercase;letter-spacing:.3px;}
   .rc-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
   .req-card .rc-liters{font-weight:700;color:var(--green-dark);white-space:nowrap;}
   .rc-print-btn{background:none;border:none;font-size:16px;line-height:1;cursor:pointer;padding:6px;margin:-6px;
@@ -640,7 +642,7 @@
     var requestedStatus = listStatus;
     approvedList.innerHTML = '<div style="padding:10px;color:var(--muted);">Loading...</div>';
     summaryBar.innerHTML = '';
-    fetch(APPS_SCRIPT_URL + '?action=list&status=' + encodeURIComponent(requestedStatus))
+    fetch(APPS_SCRIPT_URL + '?action=list&source=all&status=' + encodeURIComponent(requestedStatus))
       .then(function(r){ return r.json(); })
       .then(function(res){
         if (token !== listRequestToken) return; // stale response, ignore
@@ -671,6 +673,8 @@
 
     var printIconHtml = r.status === 'Dispensed' ? '<button type="button" class="rc-print-btn" title="Print receipt">🖨️</button>' : '';
 
+    var officeTagHtml = /^OT/i.test(r.id || '') ? '<span class="rc-source-tag">🏭 Office/Tanker</span>' : '';
+
     var head = document.createElement('div');
     head.className = 'req-card-head';
     head.innerHTML =
@@ -678,6 +682,7 @@
         '<div class="rc-id">' + esc(r.id) + '<span class="status-chip status-' + r.status + '">' + esc(r.status) + '</span></div>' +
         '<div class="rc-meta">' + esc(r.vehicleNo) + ' • ' + esc(r.driverName || '-') + '</div>' +
         '<div class="rc-meta">By: ' + esc(r.requestedBy || '-') + ' • ' + fmtDate(r.createdAt) + '</div>' +
+        officeTagHtml +
       '</div>' +
       '<div class="rc-right">' + printIconHtml + '<span class="rc-liters">' + esc(liters) + ' L</span><span class="rc-chevron">▾</span></div>';
     head.addEventListener('click', function(){
