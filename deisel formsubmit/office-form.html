@@ -191,46 +191,67 @@
   }
 
   /* ---------- Live Status floating button + panel ---------- */
-  .live-fab{position:fixed;right:18px;bottom:22px;z-index:900;width:56px;height:56px;border-radius:50%;
-    background:linear-gradient(145deg,#ff9d3d,#e0740a);border:none;cursor:pointer;padding:0;
-    box-shadow:0 7px 0 #b85c05,0 14px 26px rgba(0,0,0,.4),inset 0 2px 4px rgba(255,255,255,.45);
-    display:flex;align-items:center;justify-content:center;transition:transform .12s,box-shadow .12s;}
-  .live-fab:active{transform:translateY(4px);box-shadow:0 3px 0 #b85c05,0 6px 14px rgba(0,0,0,.35),inset 0 2px 4px rgba(255,255,255,.45);}
-  .live-fab-icon{font-size:23px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3));}
-  .live-fab-dot{position:absolute;top:5px;right:5px;width:12px;height:12px;border-radius:50%;
+  .live-fab{position:fixed;right:18px;bottom:22px;z-index:900;width:58px;height:58px;border-radius:50%;
+    background:linear-gradient(145deg,#ffb15c,#e0740a 55%,#c25f04);border:none;cursor:pointer;padding:0;
+    box-shadow:0 7px 0 #a34e03,0 14px 30px rgba(0,0,0,.45),inset 0 2px 4px rgba(255,255,255,.5),0 0 0 0 rgba(242,137,26,.5);
+    display:flex;align-items:center;justify-content:center;transition:transform .15s,box-shadow .2s;
+    animation:liveFabBreathe 2.6s ease-in-out infinite;}
+  .live-fab:hover{transform:translateY(-2px);}
+  .live-fab:active{transform:translateY(4px);box-shadow:0 3px 0 #a34e03,0 6px 14px rgba(0,0,0,.35),inset 0 2px 4px rgba(255,255,255,.45);animation:none;}
+  .live-fab.is-open{background:linear-gradient(145deg,#1b1f4f,#10132e);box-shadow:0 7px 0 #060814,0 14px 30px rgba(0,0,0,.5),inset 0 2px 4px rgba(255,255,255,.15);animation:none;}
+  @keyframes liveFabBreathe{
+    0%,100%{box-shadow:0 7px 0 #a34e03,0 14px 30px rgba(0,0,0,.45),inset 0 2px 4px rgba(255,255,255,.5),0 0 0 0 rgba(242,137,26,.5);}
+    50%{box-shadow:0 7px 0 #a34e03,0 14px 30px rgba(0,0,0,.45),inset 0 2px 4px rgba(255,255,255,.5),0 0 0 10px rgba(242,137,26,0);}
+  }
+  .live-fab-icon{font-size:24px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3));transition:transform .3s;display:block;}
+  .live-fab.is-open .live-fab-icon{transform:rotate(-14deg) scale(.92);}
+  .live-fab-dot{position:absolute;top:4px;right:4px;width:13px;height:13px;border-radius:50%;
     background:#22c55e;border:2px solid #fff;animation:liveDotPulse 1.8s infinite;}
   @keyframes liveDotPulse{
-    0%{box-shadow:0 0 0 0 rgba(34,197,94,.6);} 70%{box-shadow:0 0 0 8px rgba(34,197,94,0);} 100%{box-shadow:0 0 0 0 rgba(34,197,94,0);}
+    0%{box-shadow:0 0 0 0 rgba(34,197,94,.65);} 70%{box-shadow:0 0 0 9px rgba(34,197,94,0);} 100%{box-shadow:0 0 0 0 rgba(34,197,94,0);}
   }
-  .live-panel{position:fixed;right:18px;bottom:88px;z-index:901;width:250px;max-width:calc(100vw - 28px);
-    background:rgba(255,255,255,.96);border-radius:18px;overflow:hidden;
-    box-shadow:0 22px 50px rgba(0,0,0,.4),0 2px 0 rgba(255,255,255,.6) inset;
-    transform:scale(.85) translateY(12px);opacity:0;pointer-events:none;
-    transition:transform .22s cubic-bezier(.34,1.56,.64,1),opacity .18s;
-    backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);}
-  .live-panel.show{transform:scale(1) translateY(0);opacity:1;pointer-events:auto;}
-  .live-panel-head{display:flex;justify-content:space-between;align-items:center;
-    background:linear-gradient(135deg,var(--navy),var(--navy-dark));color:#fff;padding:10px 14px;font-size:12.5px;font-weight:700;}
-  .live-min-btn{background:rgba(255,255,255,.15);border:none;color:#fff;width:24px;height:24px;border-radius:6px;
-    cursor:pointer;font-size:13px;line-height:1;flex-shrink:0;}
-  .live-min-btn:active{background:rgba(255,255,255,.3);}
-  .live-panel-body{padding:12px 14px 14px;}
-  .live-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
-  .live-stat-tile{background:#fff;border:1px solid var(--border);border-top:3px solid var(--accent);border-radius:10px;padding:7px 2px;text-align:center;
-    box-shadow:0 3px 8px rgba(16,19,46,.1);}
-  .live-stat-tile .lnum{font-size:17px;font-weight:800;color:var(--ink);}
-  .live-stat-tile .llabel{font-size:8px;color:var(--muted);margin-top:1px;font-weight:700;text-transform:uppercase;letter-spacing:.2px;}
-  .live-list{margin-top:10px;max-height:170px;overflow-y:auto;}
-  .live-list-row{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 1px;
-    border-bottom:1px dashed var(--border);font-size:11px;}
+  .live-panel{position:fixed;right:18px;bottom:90px;z-index:901;width:264px;max-width:calc(100vw - 28px);
+    border-radius:20px;overflow:hidden;
+    background:linear-gradient(180deg,rgba(255,255,255,.97),rgba(255,255,255,.93));
+    box-shadow:0 24px 60px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.5) inset,0 0 40px rgba(242,137,26,.15);
+    transform:scale(.8) translateY(20px);opacity:0;pointer-events:none;filter:blur(6px);
+    transition:transform .32s cubic-bezier(.34,1.56,.64,1),opacity .22s,filter .22s;
+    backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);}
+  .live-panel.show{transform:scale(1) translateY(0);opacity:1;pointer-events:auto;filter:blur(0);}
+  .live-panel-head{position:relative;display:flex;justify-content:space-between;align-items:center;overflow:hidden;
+    background:linear-gradient(120deg,var(--navy),var(--navy-dark) 55%,var(--navy));background-size:220% 100%;
+    animation:liveHeadShift 6s ease-in-out infinite;color:#fff;padding:11px 14px;font-size:12.5px;font-weight:700;letter-spacing:.3px;}
+  @keyframes liveHeadShift{0%,100%{background-position:0% 0;}50%{background-position:100% 0;}}
+  .live-min-btn{background:rgba(255,255,255,.15);border:none;color:#fff;width:24px;height:24px;border-radius:7px;
+    cursor:pointer;font-size:13px;line-height:1;flex-shrink:0;transition:background .15s,transform .15s;}
+  .live-min-btn:hover{background:rgba(255,255,255,.28);transform:rotate(90deg);}
+  .live-min-btn:active{background:rgba(255,255,255,.35);}
+  .live-panel-body{padding:13px 14px 14px;}
+  .live-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;}
+  .live-stat-tile{position:relative;background:#fff;border:1px solid var(--border);border-top:3px solid var(--accent);border-radius:11px;padding:8px 2px;text-align:center;
+    box-shadow:0 3px 10px rgba(16,19,46,.1);transition:transform .18s,box-shadow .18s;}
+  .live-stat-tile:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(16,19,46,.16);}
+  .live-stat-tile .lnum{font-size:18px;font-weight:800;color:var(--ink);display:inline-block;transition:transform .2s;}
+  .live-stat-tile .lnum.bump{animation:liveNumBump .4s ease;}
+  @keyframes liveNumBump{0%{transform:scale(1);}40%{transform:scale(1.35);color:var(--accent);}100%{transform:scale(1);}}
+  .live-stat-tile .llabel{font-size:8px;color:var(--muted);margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
+  .live-list{margin-top:11px;max-height:172px;overflow-y:auto;}
+  .live-list::-webkit-scrollbar{width:5px;}
+  .live-list::-webkit-scrollbar-track{background:transparent;}
+  .live-list::-webkit-scrollbar-thumb{background:var(--gold);border-radius:4px;}
+  .live-list-row{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 2px;
+    border-bottom:1px dashed var(--border);font-size:11px;opacity:0;transform:translateX(10px);
+    animation:liveRowIn .32s ease forwards;}
   .live-list-row:last-child{border-bottom:none;}
+  @keyframes liveRowIn{to{opacity:1;transform:translateX(0);}}
   .live-list-row .lid{font-weight:700;color:var(--navy);white-space:nowrap;}
   .live-list-row .lveh{color:var(--muted);font-size:9.5px;margin-left:4px;}
-  .live-empty{text-align:center;color:var(--muted);font-size:11px;padding:8px 0;}
-  .live-updated{margin-top:10px;font-size:9.5px;color:var(--muted);text-align:center;}
+  .live-empty{text-align:center;color:var(--muted);font-size:11px;padding:10px 0;animation:liveRowIn .3s ease;}
+  .live-updated{margin-top:11px;font-size:9.5px;color:var(--muted);text-align:center;display:flex;align-items:center;justify-content:center;gap:5px;}
+  .live-updated::before{content:'';width:5px;height:5px;border-radius:50%;background:#22c55e;flex-shrink:0;}
   @media (max-width:480px){
-    .live-fab{width:50px;height:50px;right:14px;bottom:16px;}
-    .live-panel{right:14px;bottom:78px;}
+    .live-fab{width:52px;height:52px;right:14px;bottom:16px;}
+    .live-panel{right:14px;bottom:80px;}
   }
 </style>
 </head>
@@ -961,16 +982,26 @@
     var updatedEl = document.getElementById('liveUpdated');
     var pollTimer = null;
     var POLL_MS = 20000;
+    var prevCounts = { Pending: null, Approved: null, Dispensed: null };
 
     fab.addEventListener('click', function(){
       panel.classList.add('show');
+      fab.classList.add('is-open');
       refreshLive_();
       if (!pollTimer) pollTimer = setInterval(refreshLive_, POLL_MS);
     });
     minBtn.addEventListener('click', function(){
       panel.classList.remove('show');
+      fab.classList.remove('is-open');
       if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     });
+
+    function bumpNum_(el, val){
+      el.textContent = val;
+      el.classList.remove('bump');
+      void el.offsetWidth;
+      el.classList.add('bump');
+    }
 
     function refreshLive_(){
       if (!APPS_SCRIPT_URL) return;
@@ -980,13 +1011,17 @@
           if (!res.ok) { updatedEl.textContent = 'Error: ' + res.error; return; }
           var counts = { Pending: 0, Approved: 0, Dispensed: 0 };
           res.rows.forEach(function(r){ counts[r.status] = (counts[r.status] || 0) + 1; });
-          document.getElementById('liveNumPending').textContent = counts.Pending;
-          document.getElementById('liveNumApproved').textContent = counts.Approved;
-          document.getElementById('liveNumDispensed').textContent = counts.Dispensed;
+          var pendEl = document.getElementById('liveNumPending');
+          var apprEl = document.getElementById('liveNumApproved');
+          var dispEl = document.getElementById('liveNumDispensed');
+          if (prevCounts.Pending !== counts.Pending) bumpNum_(pendEl, counts.Pending); else pendEl.textContent = counts.Pending;
+          if (prevCounts.Approved !== counts.Approved) bumpNum_(apprEl, counts.Approved); else apprEl.textContent = counts.Approved;
+          if (prevCounts.Dispensed !== counts.Dispensed) bumpNum_(dispEl, counts.Dispensed); else dispEl.textContent = counts.Dispensed;
+          prevCounts = counts;
 
           var recent = res.rows.slice(0, 15);
-          listEl.innerHTML = recent.length ? recent.map(function(r){
-            return '<div class="live-list-row"><span><span class="lid">' + esc(r.id) + '</span><span class="lveh">' + esc(r.vehicleNo || '') + '</span></span>' +
+          listEl.innerHTML = recent.length ? recent.map(function(r, i){
+            return '<div class="live-list-row" style="animation-delay:' + (i * 0.045) + 's"><span><span class="lid">' + esc(r.id) + '</span><span class="lveh">' + esc(r.vehicleNo || '') + '</span></span>' +
               '<span class="status-chip status-' + r.status + '">' + esc(r.status) + '</span></div>';
           }).join('') : '<div class="live-empty">No requests yet.</div>';
 
