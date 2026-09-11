@@ -684,10 +684,12 @@
     });
   });
 
-  // Office/Tanker toggle — independent of the Pending/Approved/All status
-  // filter, so it can be combined with any of them (e.g. "Approved" +
-  // "Office/Tanker" together). Filters the already-loaded rows client-side
-  // by ID prefix, same as the search box.
+  // Office/Tanker toggle — the Pending/Approved/All status filter normally
+  // excludes OT-prefixed (Office/Tanker) requests entirely; switching this
+  // on flips it to show ONLY OT-prefixed ones, still combined with whichever
+  // status tab is active (e.g. "Approved" + "Office/Tanker" together).
+  // Filters the already-loaded rows client-side by ID prefix, same as the
+  // search box.
   var officeOnly = false;
   var officeOnlyBtn = document.getElementById('officeOnlyBtn');
   officeOnlyBtn.addEventListener('click', function(){
@@ -750,7 +752,9 @@
              String(r.id || '').toUpperCase().indexOf(q) !== -1;
     });
     if (dateFromInput.value || dateToInput.value) rows = rows.filter(function(r){ return inDateFilter_(r.createdAt); });
-    if (officeOnly) rows = rows.filter(function(r){ return /^OT/i.test(r.id || ''); });
+    rows = officeOnly
+      ? rows.filter(function(r){ return /^OT/i.test(r.id || ''); })
+      : rows.filter(function(r){ return !/^OT/i.test(r.id || ''); });
     renderSummary(rows);
     renderApprovedList(rows);
   }
