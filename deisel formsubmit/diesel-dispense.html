@@ -892,11 +892,9 @@
           if (prevCounts.Dispensed !== counts.Dispensed) bumpNum_(dispEl, counts.Dispensed); else dispEl.textContent = counts.Dispensed;
           prevCounts = counts;
 
-          var statusOrder = { Pending: 0, Approved: 1, Dispensed: 2 };
-          var sortedRows = res.rows.slice().sort(function(a, b){
-            return (statusOrder[a.status] || 3) - (statusOrder[b.status] || 3);
-          });
-          var recent = sortedRows.slice(0, 15);
+          var pendingRows = res.rows.filter(function(r){ return r.status === 'Pending'; });
+          var otherRows = res.rows.filter(function(r){ return r.status !== 'Pending'; });
+          var recent = pendingRows.concat(otherRows.slice(0, Math.max(15 - pendingRows.length, 0)));
           listEl.innerHTML = recent.length ? recent.map(function(r, i){
             return '<div class="live-list-row" style="animation-delay:' + (i * 0.045) + 's"><span><span class="lid">' + esc(r.id) + '</span><span class="lveh">' + esc(r.vehicleNo || '') + '</span></span>' +
               '<span class="status-chip status-' + r.status + '">' + esc(r.status) + '</span></div>';
