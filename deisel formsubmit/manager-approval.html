@@ -199,15 +199,19 @@
     0%,100%{box-shadow:0 7px 0 #a34e03,0 14px 30px rgba(0,0,0,.45),inset 0 2px 4px rgba(255,255,255,.5),0 0 0 0 rgba(242,137,26,.5);}
     50%{box-shadow:0 7px 0 #a34e03,0 14px 30px rgba(0,0,0,.45),inset 0 2px 4px rgba(255,255,255,.5),0 0 0 10px rgba(242,137,26,0);}
   }
-  .live-fab::after{content:'View Request Status';position:absolute;top:50%;right:calc(100% + 12px);
-    transform:translateY(-50%) translateX(6px);background:linear-gradient(135deg,var(--navy),var(--navy-dark));
-    color:#fff;font-size:10.5px;font-weight:700;letter-spacing:.2px;padding:7px 13px;border-radius:20px;
-    white-space:nowrap;box-shadow:0 8px 20px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.1) inset;
+  .live-fab::after{content:'👀 View Request Status';position:absolute;top:50%;right:calc(100% + 12px);
+    transform:translateY(-50%) translateX(6px);
+    background:linear-gradient(90deg,#ff6a3d,#ffb238,#ffe066,#5ee7a0,#3ab0ff,#c471ed,#ff6a3d);
+    background-size:320% 100%;
+    color:#fff;font-size:10.5px;font-weight:800;letter-spacing:.2px;padding:7px 13px;border-radius:20px;
+    white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.4);
+    box-shadow:0 8px 22px rgba(0,0,0,.4),0 0 0 1.5px rgba(255,255,255,.35) inset,0 0 14px rgba(255,140,20,.4);
     opacity:0;pointer-events:none;
-    animation:liveTagIn .5s ease .8s forwards,liveTagFloat 2.4s ease-in-out 1.4s infinite;}
+    animation:liveTagIn .5s ease .8s forwards,liveTagFloat 2.4s ease-in-out 1.4s infinite,liveTagGradient 4s linear infinite;}
   .live-fab.is-open::after{display:none;}
   @keyframes liveTagIn{to{opacity:1;transform:translateY(-50%) translateX(0);}}
   @keyframes liveTagFloat{0%,100%{transform:translateY(-50%) translateX(0);}50%{transform:translateY(-50%) translateX(-4px);}}
+  @keyframes liveTagGradient{0%{background-position:0% 50%;}100%{background-position:320% 50%;}}
   .live-fab-icon{font-size:24px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3));transition:transform .3s;display:block;position:relative;z-index:1;}
   .live-fab.is-open .live-fab-icon{transform:rotate(-14deg) scale(.92);}
   .live-fab-dot{position:absolute;top:4px;right:4px;width:13px;height:13px;border-radius:50%;
