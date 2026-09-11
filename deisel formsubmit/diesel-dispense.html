@@ -89,6 +89,8 @@
     background:rgba(255,255,255,.85);font-size:12px;font-weight:600;cursor:pointer;color:var(--ink);
     backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
   .list-toolbar button.active{background:var(--green);color:#fff;border-color:var(--green);}
+  .list-toolbar .office-toggle{margin-left:auto;}
+  .list-toolbar .office-toggle.active{background:#7c3aed;color:#fff;border-color:#7c3aed;}
 
   .date-filter{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--border);}
   .df-field{display:flex;flex-direction:column;gap:5px;flex:1;min-width:125px;}
@@ -369,6 +371,7 @@
           <button class="list-filter" data-status="Pending">Pending</button>
           <button class="list-filter active" data-status="Approved">Approved</button>
           <button class="list-filter" data-status="">All</button>
+          <button class="office-toggle" id="officeOnlyBtn" type="button">🏭 Office/Tanker</button>
         </div>
 
         <div class="date-filter">
@@ -681,6 +684,18 @@
     });
   });
 
+  // Office/Tanker toggle — independent of the Pending/Approved/All status
+  // filter, so it can be combined with any of them (e.g. "Approved" +
+  // "Office/Tanker" together). Filters the already-loaded rows client-side
+  // by ID prefix, same as the search box.
+  var officeOnly = false;
+  var officeOnlyBtn = document.getElementById('officeOnlyBtn');
+  officeOnlyBtn.addEventListener('click', function(){
+    officeOnly = !officeOnly;
+    officeOnlyBtn.classList.toggle('active', officeOnly);
+    applySearchAndRender();
+  });
+
   listSearch.addEventListener('input', function(){ applySearchAndRender(); });
 
   /* ---------- Date filter: From/To (leave To blank for a single day) ---------- */
@@ -735,6 +750,7 @@
              String(r.id || '').toUpperCase().indexOf(q) !== -1;
     });
     if (dateFromInput.value || dateToInput.value) rows = rows.filter(function(r){ return inDateFilter_(r.createdAt); });
+    if (officeOnly) rows = rows.filter(function(r){ return /^OT/i.test(r.id || ''); });
     renderSummary(rows);
     renderApprovedList(rows);
   }
