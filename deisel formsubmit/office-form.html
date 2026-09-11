@@ -137,7 +137,19 @@
 
   #fuelModeToggle{margin-bottom:18px;padding:5px;}
   #fuelModeToggle button{font-size:14.5px;font-weight:800;letter-spacing:.4px;padding:13px 10px;}
-  #fuelModeToggle .slider{background:linear-gradient(135deg,var(--navy),var(--navy-dark));box-shadow:0 3px 10px rgba(27,31,79,.4);}
+  #fuelModeToggle .slider{background:linear-gradient(135deg,var(--navy),var(--navy-dark));box-shadow:0 3px 10px rgba(27,31,79,.4);
+    transition:transform .28s cubic-bezier(.4,0,.2,1),background .28s;}
+  #fuelModeToggle.pos-1 .slider{background:linear-gradient(135deg,#14b8a6,#0d9488);box-shadow:0 3px 10px rgba(13,148,136,.45);}
+
+  /* ---------- Urea theme: swap the orange accent for teal while active ---------- */
+  .card.urea-theme{--form-accent:#0d9488;}
+  input:focus,textarea:focus{border-color:var(--form-accent,var(--orange));}
+  .card.urea-theme #submitBtn{background:linear-gradient(135deg,#14b8a6,#0d9488);}
+  .card.urea-theme #submitBtn:active{background:#0d9488;}
+  .card.urea-theme .history-box{border-color:rgba(13,148,136,.35);background:rgba(240,253,250,.6);}
+  .card.urea-theme .history-box .h-title{color:#0d9488;}
+  .card.urea-theme .suggestions .item:hover,.card.urea-theme .suggestions .item.active{background:rgba(13,148,136,.12);}
+  .card.urea-theme .location-row button:active{background:rgba(13,148,136,.12);}
 
   .status-chip{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;text-transform:uppercase;}
   .status-Pending{background:#fef3c7;color:#d97706;}
@@ -312,7 +324,7 @@
       <div class="mode-toggle" id="fuelModeToggle">
         <span class="slider"></span>
         <button class="fuel-mode active" type="button" data-fuel="Diesel">⛽ DIESEL</button>
-        <button class="fuel-mode" type="button" data-fuel="Urea">🧪 UREA</button>
+        <button class="fuel-mode" type="button" data-fuel="Urea">🪣 UREA</button>
       </div>
       <form id="reqForm">
         <label>Vehicle No <span class="req">*</span></label>
@@ -471,6 +483,7 @@
   var selectedFuelType = 'Diesel';
   var fuelModeToggle = document.getElementById('fuelModeToggle');
   var fillLitersText = document.getElementById('fillLitersText');
+  var formCard = document.querySelector('.card');
   document.querySelectorAll('.fuel-mode').forEach(function(btn, idx){
     btn.addEventListener('click', function(){
       document.querySelectorAll('.fuel-mode').forEach(function(b){ b.classList.remove('active'); });
@@ -478,6 +491,10 @@
       fuelModeToggle.classList.toggle('pos-1', idx === 1);
       selectedFuelType = btn.getAttribute('data-fuel');
       fillLitersText.textContent = 'Fill Liters (' + selectedFuelType + ')';
+      formCard.classList.toggle('urea-theme', selectedFuelType === 'Urea');
+      // Re-check refueling history under the newly selected fuel type
+      var v = vehicleInput.value.trim();
+      if (v) loadVehicleHistory(v);
     });
   });
 
@@ -602,20 +619,22 @@
 
   function loadVehicleHistory(vehicle){
     if (!vehicle || !APPS_SCRIPT_URL) { vehicleHistoryBox.style.display = 'none'; return; }
+    var fuelIcon = selectedFuelType === 'Urea' ? '🪣' : '🕓';
+    var fuelSuffix = ' (' + selectedFuelType + ')';
     vehicleHistoryBox.style.display = 'block';
-    vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last Refueling</div><div class="h-msg">Loading...</div>';
+    vehicleHistoryBox.innerHTML = '<div class="h-title">' + fuelIcon + ' ' + esc(vehicle) + ' — Last Refueling' + fuelSuffix + '</div><div class="h-msg">Loading...</div>';
     // Filtering/trimming happens on the server — the full request list is never downloaded
-    fetch(APPS_SCRIPT_URL + '?action=history&limit=5&vehicle=' + encodeURIComponent(vehicle))
+    fetch(APPS_SCRIPT_URL + '?action=history&limit=5&vehicle=' + encodeURIComponent(vehicle) + '&fuelType=' + encodeURIComponent(selectedFuelType))
       .then(function(r){ return r.json(); })
       .then(function(res){
         if (vehicleInput.value.trim() !== vehicle) return; // stale response, ignore
-        if (!res.ok) { vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 Last Refueling</div><div class="h-msg">Error: ' + esc(res.error) + '</div>'; return; }
+        if (!res.ok) { vehicleHistoryBox.innerHTML = '<div class="h-title">' + fuelIcon + ' Last Refueling' + fuelSuffix + '</div><div class="h-msg">Error: ' + esc(res.error) + '</div>'; return; }
         var entries = res.rows;
         if (!entries.length) {
-          vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last Refueling</div><div class="h-msg">No previous refueling found for this vehicle.</div>';
+          vehicleHistoryBox.innerHTML = '<div class="h-title">' + fuelIcon + ' ' + esc(vehicle) + ' — Last Refueling' + fuelSuffix + '</div><div class="h-msg">No previous ' + selectedFuelType + ' refueling found for this vehicle.</div>';
           return;
         }
-        vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last ' + entries.length + ' Refueling</div>' +
+        vehicleHistoryBox.innerHTML = '<div class="h-title">' + fuelIcon + ' ' + esc(vehicle) + ' — Last ' + entries.length + ' Refueling' + fuelSuffix + '</div>' +
           '<table><thead><tr><th>Date</th><th>Liters</th><th>Odometer</th><th>Driver</th></tr></thead><tbody>' +
           entries.map(function(r){
             return '<tr><td>' + fmtDate(r.dispensedAt) + '</td><td>' + esc(r.actualLiters) + '</td><td>' + esc(r.odometerKm || '-') + '</td><td>' + esc(r.driverName || '-') + '</td></tr>';
@@ -623,7 +642,7 @@
       })
       .catch(function(err){
         if (vehicleInput.value.trim() !== vehicle) return;
-        vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 Last Refueling</div><div class="h-msg">Network error: ' + esc(err.message) + '</div>';
+        vehicleHistoryBox.innerHTML = '<div class="h-title">' + fuelIcon + ' Last Refueling' + fuelSuffix + '</div><div class="h-msg">Network error: ' + esc(err.message) + '</div>';
       });
   }
 

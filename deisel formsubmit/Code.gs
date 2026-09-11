@@ -113,7 +113,7 @@ function doGet(e) {
     if (action === 'vehicleDriver') return jsonOut_(lookupDriverByVehicleToday_(p.vehicle));
     if (action === 'pumps') return jsonOut_(listPumps_());
     if (action === 'routes') return jsonOut_(listRoutes_());
-    if (action === 'history') return jsonOut_(vehicleHistory_(p.vehicle, p.limit || 5));
+    if (action === 'history') return jsonOut_(vehicleHistory_(p.vehicle, p.limit || 5, p.fuelType || ''));
     // All three dropdown lists in a single round-trip (Apps Script takes ~2.5s
     // per call regardless of payload size, so fewer calls is the real speed win)
     if (action === 'lists') {
@@ -267,18 +267,22 @@ function readRequestRows_(sheet, status, by) {
 // refuel history. Merges both sheets, since a vehicle can be fueled via
 // either form. Filtered/trimmed on the server instead of downloading
 // the whole list.
-function vehicleHistory_(vehicle, limit) {
+function vehicleHistory_(vehicle, limit, fuelType) {
   if (!vehicle) return { ok: false, error: 'Provide a Vehicle No' };
   var target = String(vehicle).trim().toUpperCase();
   var max = Number(limit) || 5;
-  var rows = readVehicleHistoryRows_(getSheet_(), target).concat(readVehicleHistoryRows_(getOfficeSheet_(), target));
+  var rows = readVehicleHistoryRows_(getSheet_(), target, fuelType).concat(readVehicleHistoryRows_(getOfficeSheet_(), target, fuelType));
   // Row order != dispense order (an older request can still be dispensed later),
   // so we sort by actual dispense time before taking the latest N.
   rows.sort(function(a, b){ return new Date(b.dispensedAt) - new Date(a.dispensedAt); });
   return { ok: true, rows: rows.slice(0, max) };
 }
 
-function readVehicleHistoryRows_(sheet, target) {
+// fuelType — optional ('Diesel'/'Urea'); when given, only rows of that fuel
+// type are returned (the Office form's history box switches with its tab, so
+// picking Urea shouldn't show a Diesel fill and vice versa). Empty = no filter,
+// used by the Diesel-only forms (calling-form, diesel-dispense).
+function readVehicleHistoryRows_(sheet, target, fuelType) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
   var data = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
@@ -288,6 +292,7 @@ function readVehicleHistoryRows_(sheet, target) {
     if (!r[COL.ID - 1]) continue;
     if (String(r[COL.STATUS - 1]) !== 'Dispensed') continue;
     if (String(r[COL.VEHICLE - 1] || '').trim().toUpperCase() !== target) continue;
+    if (fuelType && String(r[COL.FUEL_TYPE - 1] || 'Diesel') !== fuelType) continue;
     rows.push({
       dispensedAt: r[COL.DISP_AT - 1],
       actualLiters: r[COL.ACTUAL_LITERS - 1],
