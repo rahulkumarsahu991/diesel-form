@@ -43,7 +43,8 @@
   }
   .wrap{max-width:600px;margin:0 auto;padding:clamp(12px,3vw,24px);}
   .card{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:16px;padding:clamp(16px,3vw,28px);margin-top:16px;
-    box-shadow:0 8px 32px rgba(16,19,46,.25);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);}
+    box-shadow:0 8px 32px rgba(16,19,46,.25);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
+    transition:background .4s ease,border-color .4s ease;}
   label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:14px 0 6px;}
   label:first-of-type{margin-top:0;}
   input,textarea{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:8px;font-size:16px;font-family:inherit;background:#fff;}
@@ -142,7 +143,9 @@
   #fuelModeToggle.pos-1 .slider{background:linear-gradient(135deg,#14b8a6,#0d9488);box-shadow:0 3px 10px rgba(13,148,136,.45);}
 
   /* ---------- Urea theme: swap the orange accent for teal while active ---------- */
-  .card.urea-theme{--form-accent:#0d9488;}
+  .card.urea-theme{--form-accent:#0d9488;
+    background:linear-gradient(165deg,rgba(153,246,228,.55),rgba(204,251,241,.5));
+    border-color:rgba(13,148,136,.4);}
   input:focus,textarea:focus{border-color:var(--form-accent,var(--orange));}
   .card.urea-theme #submitBtn{background:linear-gradient(135deg,#14b8a6,#0d9488);}
   .card.urea-theme #submitBtn:active{background:#0d9488;}
