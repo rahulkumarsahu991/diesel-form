@@ -371,8 +371,11 @@
       <div class="cd-icon">🗑️</div>
       <h3>Delete Request</h3>
       <p>This permanently deletes request <b id="delIdLabel"></b> from the sheet. This cannot be undone.</p>
-      <label>Your Name</label>
-      <input type="text" id="delName" placeholder="Your name" autocomplete="off">
+      <label>Admin Password</label>
+      <div class="pw-wrap">
+        <input type="password" id="delPassword" placeholder="Password" autocomplete="off">
+        <button type="button" class="pw-toggle" id="delPwToggle" tabindex="-1" aria-label="Show password">👁️</button>
+      </div>
       <div class="cd-err" id="delErr"></div>
       <div class="cd-actions">
         <button type="button" id="delCancel" class="cd-cancel">Cancel</button>
@@ -422,6 +425,7 @@
   }
   setupPwToggle(document.getElementById('loginPass'), document.getElementById('pwToggle'));
   setupPwToggle(document.getElementById('cdPassword'), document.getElementById('cdPwToggle'));
+  setupPwToggle(document.getElementById('delPassword'), document.getElementById('delPwToggle'));
 
   // Paste the /exec URL here after deploying the Google Apps Script "Web App"
   var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbybGePj0rLOxG_xdK-XjXtipxm_izdiozm9rgWbKTsY7L7XbFhSrzgs86JNCWvxO-0ipw/exec";
@@ -564,7 +568,7 @@
 
   /* ---------- Delete a single request (Admin/Director only) ---------- */
   var delOverlay = document.getElementById('deleteReqOverlay');
-  var delName = document.getElementById('delName');
+  var delPassword = document.getElementById('delPassword');
   var delErr = document.getElementById('delErr');
   var delCancel = document.getElementById('delCancel');
   var delConfirm = document.getElementById('delConfirm');
@@ -574,18 +578,18 @@
   function openDeleteModal_(id){
     pendingDeleteId = id;
     delIdLabel.textContent = id;
-    delName.value = '';
+    delPassword.value = '';
     delErr.textContent = '';
     delOverlay.classList.add('show');
-    delName.focus();
+    delPassword.focus();
   }
   delCancel.addEventListener('click', function(){ delOverlay.classList.remove('show'); });
   delOverlay.addEventListener('click', function(e){ if (e.target === delOverlay) delOverlay.classList.remove('show'); });
 
   delConfirm.addEventListener('click', function(){
-    var name = delName.value.trim();
+    var password = delPassword.value;
     delErr.textContent = '';
-    if (!name) { delErr.textContent = 'Enter your name.'; delName.focus(); return; }
+    if (!password) { delErr.textContent = 'Enter the admin password.'; delPassword.focus(); return; }
     if (!APPS_SCRIPT_URL) { delErr.textContent = 'Setup pending: paste the APPS_SCRIPT_URL.'; return; }
 
     delConfirm.disabled = true;
@@ -593,7 +597,7 @@
     fetch(APPS_SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'deleteRequest', id: pendingDeleteId, deletedBy: name })
+      body: JSON.stringify({ action: 'deleteRequest', id: pendingDeleteId, password: password })
     })
     .then(function(r){ return r.json(); })
     .then(function(res){

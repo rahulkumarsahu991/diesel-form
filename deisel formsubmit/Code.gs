@@ -43,6 +43,9 @@ var TIMEZONE = 'Asia/Kolkata';
 // not a separate secret to manage.
 var ADMIN_RESET_PASSWORD = 'Daman@11';
 
+// Gate for the Director/Admin panel's per-row "✕" delete button.
+var DELETE_REQUEST_PASSWORD = 'Daman@#*11';
+
 // Source sheet for the vehicle list (Diesel Sheet), tab "fleet s vehical" — Column C
 var VEHICLE_SHEET_ID = '1EEks9zfIjnYKxARCN6nBTVTxboV19_i32Gg16BzGZdk';
 var VEHICLE_SHEET_NAME = 'fleet s vehical';
@@ -900,19 +903,21 @@ function clearAllData_(body) {
 }
 
 // Deletes a single request row directly, no archive — used by the
-// Director/Admin panel's per-row "✕" delete button. Only asks for a name
-// (for the audit log), no password: the page is already behind the
-// Admin login, so this isn't a second security gate like clearAllData_,
-// just a lighter-weight confirmation for a single-row action.
+// Director/Admin panel's per-row "✕" delete button. Requires the delete
+// password, checked here on the server (not just in the browser) so
+// calling this action directly still requires it.
 function deleteRequestRow_(body) {
   if (!body.id) return { ok: false, error: 'Provide a Request ID' };
+  if (!body.password || body.password !== DELETE_REQUEST_PASSWORD) {
+    return { ok: false, error: 'Incorrect password' };
+  }
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
     var found = findRow_(body.id);
     if (!found) return { ok: false, error: 'Request ID not found' };
     found.sheet.deleteRow(found.rowIndex);
-    Logger.log('Request ' + body.id + ' deleted via web app by "' + (body.deletedBy || 'unknown') + '".');
+    Logger.log('Request ' + body.id + ' deleted via web app.');
     return { ok: true };
   } finally {
     lock.releaseLock();
