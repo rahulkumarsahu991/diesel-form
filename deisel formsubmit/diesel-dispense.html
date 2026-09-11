@@ -538,6 +538,7 @@
     var box = document.getElementById('detailsBox');
     box.innerHTML =
       detailRow('Request ID', row.id) +
+      detailRow('Fuel Type', row.fuelType || 'Diesel') +
       detailRow('Vehicle No', row.vehicleNo) +
       detailRow('Driver ID', row.driverId) +
       detailRow('Driver Name', row.driverName) +
@@ -598,6 +599,7 @@
       '<h2>✅ Diesel Dispensed</h2>' +
       '<div class="rno">Receipt No: ' + r.receiptNo + '</div>' +
       detailRow('Request ID', r.id) +
+      detailRow('Fuel Type', r.fuelType || 'Diesel') +
       detailRow('Vehicle No', r.vehicleNo) +
       detailRow('Driver ID', r.driverId) +
       detailRow('Driver Name', r.driverName) +
@@ -778,6 +780,7 @@
     var printIconHtml = r.status === 'Dispensed' ? '<button type="button" class="rc-print-btn" title="Print receipt">🖨️</button>' : '';
 
     var officeTagHtml = /^OT/i.test(r.id || '') ? '<span class="rc-source-tag">🏭 Office/Tanker</span>' : '';
+    var fuelTagHtml = r.fuelType === 'Urea' ? '<span class="rc-source-tag" style="background:rgba(20,184,166,.16);color:#0d9488;">🧪 Urea</span>' : '';
 
     var head = document.createElement('div');
     head.className = 'req-card-head';
@@ -786,7 +789,7 @@
         '<div class="rc-id">' + esc(r.id) + '<span class="status-chip status-' + r.status + '">' + esc(r.status) + '</span></div>' +
         '<div class="rc-meta">' + esc(r.vehicleNo) + ' • ' + esc(r.driverName || '-') + '</div>' +
         '<div class="rc-meta">By: ' + esc(r.requestedBy || '-') + ' • ' + fmtDate(r.createdAt) + '</div>' +
-        officeTagHtml +
+        officeTagHtml + fuelTagHtml +
       '</div>' +
       '<div class="rc-right">' + printIconHtml + '<span class="rc-liters">' + esc(liters) + ' L</span><span class="rc-chevron">▾</span></div>';
     head.addEventListener('click', function(){

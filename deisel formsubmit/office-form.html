@@ -135,6 +135,10 @@
     min-height:44px;transition:color .22s;white-space:nowrap;}
   .mode-toggle button.active{color:#fff;}
 
+  #fuelModeToggle{margin-bottom:18px;padding:5px;}
+  #fuelModeToggle button{font-size:14.5px;font-weight:800;letter-spacing:.4px;padding:13px 10px;}
+  #fuelModeToggle .slider{background:linear-gradient(135deg,var(--navy),var(--navy-dark));box-shadow:0 3px 10px rgba(27,31,79,.4);}
+
   .status-chip{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;text-transform:uppercase;}
   .status-Pending{background:#fef3c7;color:#d97706;}
   .status-Approved{background:#dcfce7;color:var(--green);}
@@ -305,6 +309,11 @@
 
   <div class="wrap">
     <div class="card">
+      <div class="mode-toggle" id="fuelModeToggle">
+        <span class="slider"></span>
+        <button class="fuel-mode active" type="button" data-fuel="Diesel">⛽ DIESEL</button>
+        <button class="fuel-mode" type="button" data-fuel="Urea">🧪 UREA</button>
+      </div>
       <form id="reqForm">
         <label>Vehicle No <span class="req">*</span></label>
         <div class="autocomplete-wrap">
@@ -331,7 +340,7 @@
         <label>Odometer (KM) <span class="req">*</span></label>
         <input type="number" id="odometerKm" required min="0" step="1" placeholder="e.g. 145230">
 
-        <label>Fill Liters <span class="req">*</span></label>
+        <label><span id="fillLitersText">Fill Liters (Diesel)</span> <span class="req">*</span></label>
         <input type="number" id="requestedLiters" required min="1" step="0.1" placeholder="e.g. 100">
 
         <label>Route / Trip</label>
@@ -454,6 +463,23 @@
   var form = document.getElementById('reqForm');
   var msgBox = document.getElementById('msgBox');
   var submitBtn = document.getElementById('submitBtn');
+
+  /* ---------- Diesel / Urea category toggle ----------
+     Same form, same fields — this just tags the submission with which
+     fuel was filled, so it lands in the same Office-Tanker sheet with one
+     extra "Fuel Type" column instead of needing a separate form. */
+  var selectedFuelType = 'Diesel';
+  var fuelModeToggle = document.getElementById('fuelModeToggle');
+  var fillLitersText = document.getElementById('fillLitersText');
+  document.querySelectorAll('.fuel-mode').forEach(function(btn, idx){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.fuel-mode').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      fuelModeToggle.classList.toggle('pos-1', idx === 1);
+      selectedFuelType = btn.getAttribute('data-fuel');
+      fillLitersText.textContent = 'Fill Liters (' + selectedFuelType + ')';
+    });
+  });
 
   /* ---------- Dropdown lists: one call + localStorage cache ----------
      Apps Script takes ~2.5s per request (even for a tiny payload), so all
@@ -771,6 +797,7 @@
 
     var payload = {
       action: 'createOffice',
+      fuelType: selectedFuelType,
       vehicleNo: vehicleInput.value.trim(),
       driverId: driverIdInput.value.trim(),
       driverName: driverNameVal,
@@ -953,7 +980,7 @@
     head.innerHTML =
       '<div>' +
         '<div style="font-weight:800;color:var(--navy);font-size:13px;">' + esc(r.id) + (myMode === 'all' ? ' <span style="font-weight:600;color:var(--orange-dark);">— ' + esc(r.requestedBy) + '</span>' : '') + '</div>' +
-        '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + esc(r.vehicleNo) + ' • ' + esc(r.requestedLiters) + ' L • ' + fmtDate(r.createdAt) + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + esc(r.vehicleNo) + ' • ' + (r.fuelType === 'Urea' ? '🧪 Urea' : '⛽ Diesel') + ' • ' + esc(r.requestedLiters) + ' L • ' + fmtDate(r.createdAt) + '</div>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">' +
         '<span class="status-chip status-' + r.status + '">' + esc(r.status) + '</span>' +

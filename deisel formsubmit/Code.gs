@@ -86,7 +86,7 @@ var HEADERS = [
   'Contact Number', 'Calling Remarks', 'Status', 'Manager Name',
   'Approved Liters', 'Manager Remarks', 'OTP', 'Approved At', 'Dispensed By',
   'Actual Liters Dispensed', 'Dispensed At', 'Receipt No', 'Current Location', 'Odometer KM',
-  'Rate Per Liter', 'Amount'
+  'Rate Per Liter', 'Amount', 'Fuel Type'
 ];
 
 // Column numbers (1-indexed) — matches the HEADERS array
@@ -97,7 +97,8 @@ var COL = {
   REQ_LITERS: 8, REQ_BY: 9, CONTACT: 10, CALL_REMARKS: 11, STATUS: 12,
   MGR_NAME: 13, APPROVED_LITERS: 14, MGR_REMARKS: 15, OTP: 16,
   APPROVED_AT: 17, DISP_BY: 18, ACTUAL_LITERS: 19, DISP_AT: 20, RECEIPT: 21,
-  CURRENT_LOCATION: 22, ODOMETER: 23, RATE_PER_LITER: 24, AMOUNT: 25
+  CURRENT_LOCATION: 22, ODOMETER: 23, RATE_PER_LITER: 24, AMOUNT: 25,
+  FUEL_TYPE: 26
 };
 
 function doGet(e) {
@@ -215,7 +216,8 @@ function rowToObj_(row) {
     dispensedAt: row[COL.DISP_AT - 1],
     receiptNo: row[COL.RECEIPT - 1],
     ratePerLiter: row[COL.RATE_PER_LITER - 1],
-    amount: row[COL.AMOUNT - 1]
+    amount: row[COL.AMOUNT - 1],
+    fuelType: row[COL.FUEL_TYPE - 1] || 'Diesel'
     // NOTE: OTP is deliberately not returned here (in list/get) — security
   };
 }
@@ -362,6 +364,7 @@ function createRequest_(body) {
     row[COL.CONTACT - 1] = body.contactNumber || '';
     row[COL.CALL_REMARKS - 1] = body.callingRemarks || '';
     row[COL.STATUS - 1] = 'Pending';
+    row[COL.FUEL_TYPE - 1] = 'Diesel';
 
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush(); // make sure this write is visible before the lock releases
@@ -417,6 +420,7 @@ function createOfficeRequest_(body) {
     row[COL.MGR_NAME - 1] = 'Office/Tanker (direct)';
     row[COL.APPROVED_LITERS - 1] = liters;
     row[COL.APPROVED_AT - 1] = now;
+    row[COL.FUEL_TYPE - 1] = (body.fuelType === 'Urea') ? 'Urea' : 'Diesel';
 
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush();
@@ -853,6 +857,28 @@ function hideOfficeOtpColumn() {
   var sheet = getOfficeSheet_(); // creates the tab if it doesn't exist yet
   sheet.hideColumns(COL.OTP);
   Logger.log('Column ' + COL.OTP + ' (OTP) hidden on the "' + OFFICE_SHEET_NAME + '" tab.');
+}
+
+// One-time utility — run once (Apps Script editor -> select this function ->
+// Run) after adding "Fuel Type" to HEADERS/COL. Writes the new header cell
+// to both existing sheets (their header row was already written before this
+// column existed, so it won't pick it up on its own) and backfills 'Diesel'
+// into every existing row, since all requests were diesel before the Urea
+// option existed on the Office/Tanker form.
+function addFuelTypeColumn() {
+  [getSheet_(), getOfficeSheet_()].forEach(function(sheet) {
+    sheet.getRange(1, COL.FUEL_TYPE).setValue('Fuel Type');
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return;
+    var range = sheet.getRange(2, COL.FUEL_TYPE, lastRow - 1, 1);
+    var values = range.getValues();
+    var changed = false;
+    for (var i = 0; i < values.length; i++) {
+      if (!values[i][0]) { values[i][0] = 'Diesel'; changed = true; }
+    }
+    if (changed) range.setValues(values);
+  });
+  Logger.log('Fuel Type column added/backfilled on both sheets.');
 }
 
 var ARCHIVE_SHEET_NAME = 'Archive';
