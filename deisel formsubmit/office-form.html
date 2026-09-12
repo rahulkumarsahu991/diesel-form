@@ -544,30 +544,52 @@
   /* ---------- Before/After Refueling photo capture (optional) ----------
      Resizes/compresses on-device before it ever leaves the browser — a raw
      phone-camera photo can be several MB, which is slow to upload and adds
-     up fast in Drive storage over hundreds of requests. */
+     up fast in Drive storage over hundreds of requests.
+
+     This used to go through FileReader.readAsDataURL() first — turning a
+     phone's full-resolution original (often 8-12MB) into an equally huge
+     base64 STRING, just so an <img> could decode it a second time. That
+     extra copy sitting in memory alongside the phone's own camera-app
+     memory use is exactly the kind of pressure that gets a mobile browser
+     tab killed/reloaded by the OS — which matches what was actually being
+     reported (reload right after taking the photo, working fine on a
+     laptop where memory isn't tight). createImageBitmap() decodes the file
+     directly with no base64 detour, so it's used whenever the browser
+     supports it (every current mobile browser does), falling back to the
+     old Image+objectURL path only for very old browsers. */
   function compressImage_(file, callback){
-    var reader = new FileReader();
-    reader.onload = function(e){
-      var imgEl = new Image();
-      imgEl.onload = function(){
-        var maxDim = 1024;
-        var w = imgEl.width, h = imgEl.height;
-        if (w > maxDim || h > maxDim) {
-          if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
-          else { w = Math.round(w * maxDim / h); h = maxDim; }
-        }
-        var canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(imgEl, 0, 0, w, h);
-        callback(canvas.toDataURL('image/jpeg', 0.6));
-        // Free the decoded bitmap ASAP — on low-RAM phones, holding this
-        // (plus the original file) alongside the camera app's own memory
-        // use is what tends to make the OS kill/reload the browser tab.
-        imgEl.src = '';
-      };
-      imgEl.src = e.target.result;
+    var maxDim = 1024, quality = 0.6;
+
+    function fromSource(w0, h0, drawSource, cleanup){
+      var w = w0, h = h0;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(drawSource, 0, 0, w, h);
+      callback(canvas.toDataURL('image/jpeg', quality));
+      if (cleanup) cleanup();
+    }
+
+    if (window.createImageBitmap) {
+      createImageBitmap(file).then(function(bitmap){
+        fromSource(bitmap.width, bitmap.height, bitmap, function(){ bitmap.close(); });
+      }).catch(function(){ compressImageFallback_(file, fromSource); });
+    } else {
+      compressImageFallback_(file, fromSource);
+    }
+  }
+
+  function compressImageFallback_(file, fromSource){
+    var objectUrl = URL.createObjectURL(file);
+    var imgEl = new Image();
+    imgEl.onload = function(){
+      fromSource(imgEl.naturalWidth, imgEl.naturalHeight, imgEl, function(){ URL.revokeObjectURL(objectUrl); });
     };
-    reader.readAsDataURL(file);
+    imgEl.onerror = function(){ URL.revokeObjectURL(objectUrl); };
+    imgEl.src = objectUrl;
   }
 
   function setupPhotoCapture_(prefix){
