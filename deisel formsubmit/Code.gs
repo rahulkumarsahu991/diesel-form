@@ -945,7 +945,11 @@ function addPhotoColumns() {
     // Whole-column plain-text format so Sheets never auto-chips a Drive
     // link written into these columns (see the comment in
     // createOfficeRequest_ for why that silently breaks getValues()).
-    sheet.getRange(1, COL.BEFORE_PHOTO, sheet.getMaxRows(), 2).setNumberFormat('@');
+    // NOTE: must be two single-column calls — Sheets rejects a full-height
+    // format spanning more than one column at once ("Please make a
+    // selection within a single column to perform column level actions").
+    sheet.getRange(1, COL.BEFORE_PHOTO, sheet.getMaxRows(), 1).setNumberFormat('@');
+    sheet.getRange(1, COL.AFTER_PHOTO, sheet.getMaxRows(), 1).setNumberFormat('@');
   });
   Logger.log('Photo columns added to both sheets.');
 }
