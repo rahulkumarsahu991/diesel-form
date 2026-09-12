@@ -86,7 +86,7 @@ var HEADERS = [
   'Contact Number', 'Calling Remarks', 'Status', 'Manager Name',
   'Approved Liters', 'Manager Remarks', 'OTP', 'Approved At', 'Dispensed By',
   'Actual Liters Dispensed', 'Dispensed At', 'Receipt No', 'Current Location', 'Odometer KM',
-  'Rate Per Liter', 'Amount', 'Fuel Type'
+  'Rate Per Liter', 'Amount', 'Fuel Type', 'Before Refueling Photo', 'After Refueling Photo'
 ];
 
 // Column numbers (1-indexed) — matches the HEADERS array
@@ -98,7 +98,7 @@ var COL = {
   MGR_NAME: 13, APPROVED_LITERS: 14, MGR_REMARKS: 15, OTP: 16,
   APPROVED_AT: 17, DISP_BY: 18, ACTUAL_LITERS: 19, DISP_AT: 20, RECEIPT: 21,
   CURRENT_LOCATION: 22, ODOMETER: 23, RATE_PER_LITER: 24, AMOUNT: 25,
-  FUEL_TYPE: 26
+  FUEL_TYPE: 26, BEFORE_PHOTO: 27, AFTER_PHOTO: 28
 };
 
 function doGet(e) {
@@ -217,7 +217,9 @@ function rowToObj_(row) {
     receiptNo: row[COL.RECEIPT - 1],
     ratePerLiter: row[COL.RATE_PER_LITER - 1],
     amount: row[COL.AMOUNT - 1],
-    fuelType: row[COL.FUEL_TYPE - 1] || 'Diesel'
+    fuelType: row[COL.FUEL_TYPE - 1] || 'Diesel',
+    beforePhoto: row[COL.BEFORE_PHOTO - 1] || '',
+    afterPhoto: row[COL.AFTER_PHOTO - 1] || ''
     // NOTE: OTP is deliberately not returned here (in list/get) — security
   };
 }
@@ -392,6 +394,41 @@ function nextOfficeRequestSeq_(sheet) {
   return maxSeq + 1;
 }
 
+// Drive folder that holds Before/After refueling photos from the Office
+// Pump/Tanker form. Looked up by name (not a hardcoded ID) so it's created
+// automatically the first time a photo is uploaded.
+var PHOTO_FOLDER_NAME = 'Diesel Office-Tanker Refueling Photos';
+function getPhotoFolder_() {
+  var folders = DriveApp.getFoldersByName(PHOTO_FOLDER_NAME);
+  if (folders.hasNext()) return folders.next();
+  return DriveApp.createFolder(PHOTO_FOLDER_NAME);
+}
+
+// dataUrl looks like "data:image/jpeg;base64,...." (built client-side after
+// resizing/compressing the photo). Returns a direct-viewable Drive URL
+// ("uc?export=view" — works both as an <img src> and a normal link, unlike
+// the default Drive file.getUrl() which opens the Drive viewer UI), or ''
+// if no photo was provided. Wrapped so a Drive/sharing hiccup never blocks
+// the rest of the submission — the request still saves, just without that
+// photo's link.
+function uploadPhotoFromDataUrl_(dataUrl, filename) {
+  if (!dataUrl) return '';
+  try {
+    var m = String(dataUrl).match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if (!m) return '';
+    var mimeType = m[1];
+    var ext = mimeType.split('/')[1] || 'jpg';
+    var bytes = Utilities.base64Decode(m[2]);
+    var blob = Utilities.newBlob(bytes, mimeType, filename + '.' + ext);
+    var file = getPhotoFolder_().createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return 'https://drive.google.com/uc?export=view&id=' + file.getId();
+  } catch (err) {
+    Logger.log('Photo upload failed for ' + filename + ': ' + err.message);
+    return '';
+  }
+}
+
 // Office Pump/Tanker Distribution Form's submit handler. Unlike createRequest_,
 // this skips the Manager stage entirely — the row is written straight in as
 // "Approved" (Approved Liters = the liters filled) so it shows up right away
@@ -406,6 +443,8 @@ function createOfficeRequest_(body) {
     var id = 'OT' + pad_(seq, 3);
     var now = new Date();
     var liters = Number(body.requestedLiters) || 0;
+    var beforePhotoUrl = uploadPhotoFromDataUrl_(body.beforePhoto, id + '_before');
+    var afterPhotoUrl = uploadPhotoFromDataUrl_(body.afterPhoto, id + '_after');
 
     var row = [];
     row[COL.ID - 1] = id;
@@ -426,6 +465,8 @@ function createOfficeRequest_(body) {
     row[COL.APPROVED_LITERS - 1] = liters;
     row[COL.APPROVED_AT - 1] = now;
     row[COL.FUEL_TYPE - 1] = (body.fuelType === 'Urea') ? 'Urea' : 'Diesel';
+    row[COL.BEFORE_PHOTO - 1] = beforePhotoUrl;
+    row[COL.AFTER_PHOTO - 1] = afterPhotoUrl;
 
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush();
@@ -884,6 +925,17 @@ function addFuelTypeColumn() {
     if (changed) range.setValues(values);
   });
   Logger.log('Fuel Type column added/backfilled on both sheets.');
+}
+
+// One-time utility — run once after adding the Before/After Refueling Photo
+// columns to HEADERS/COL. Just writes the two header cells (no backfill
+// needed — old rows never had photos, so blank is the correct value there).
+function addPhotoColumns() {
+  [getSheet_(), getOfficeSheet_()].forEach(function(sheet) {
+    sheet.getRange(1, COL.BEFORE_PHOTO).setValue('Before Refueling Photo');
+    sheet.getRange(1, COL.AFTER_PHOTO).setValue('After Refueling Photo');
+  });
+  Logger.log('Photo columns added to both sheets.');
 }
 
 var ARCHIVE_SHEET_NAME = 'Archive';

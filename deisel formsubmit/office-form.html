@@ -61,6 +61,19 @@
   .location-row button:active{background:var(--orange-light);}
   .location-row button:disabled{opacity:.6;cursor:not-allowed;}
   @media (max-width:380px){ .location-row{flex-direction:column;} .location-row button{width:100%;} }
+
+  .photo-capture{margin-top:4px;}
+  .photo-btn{width:100%;margin-top:0;padding:12px;background:#fff;color:var(--navy);border:1.5px dashed var(--border);
+    border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;}
+  .photo-btn:active{background:var(--orange-light);border-color:var(--orange);}
+  .card.urea-theme .photo-btn:active{background:rgba(13,148,136,.1);border-color:#0d9488;}
+  .photo-preview{margin-top:8px;border:1px solid var(--border);border-radius:10px;padding:8px;background:rgba(255,255,255,.7);}
+  .photo-preview img{width:100%;max-height:220px;object-fit:cover;border-radius:8px;display:block;}
+  .photo-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;flex-wrap:wrap;}
+  .photo-confirm{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink);font-weight:600;cursor:pointer;}
+  .photo-confirm input{width:auto;margin:0;}
+  .photo-retake{width:auto;margin:0;padding:7px 12px;background:#fff;color:var(--navy);border:1px solid var(--border);
+    border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;}
   button{width:100%;margin-top:20px;padding:14px;background:var(--orange);color:#fff;border:none;border-radius:9px;font-size:16px;font-weight:700;cursor:pointer;}
   button:disabled{opacity:.6;cursor:not-allowed;}
   button:active{background:var(--orange-dark);}
@@ -380,6 +393,32 @@
         <label>Remarks</label>
         <textarea id="callingRemarks" placeholder="Any extra info (optional)"></textarea>
 
+        <label>Before Refueling Photo <span class="hint" style="font-weight:400;">(optional)</span></label>
+        <div class="photo-capture" id="beforePhotoWrap">
+          <input type="file" accept="image/*" capture="environment" id="beforePhotoInput" style="display:none">
+          <button type="button" class="photo-btn" id="beforePhotoBtn">📷 Take Before Photo</button>
+          <div class="photo-preview" id="beforePhotoPreview" style="display:none;">
+            <img id="beforePhotoImg" alt="Before refueling photo">
+            <div class="photo-actions">
+              <label class="photo-confirm"><input type="checkbox" id="beforePhotoConfirm"> ✅ Photo is clear</label>
+              <button type="button" class="photo-retake" id="beforePhotoRetake">🔁 Retake</button>
+            </div>
+          </div>
+        </div>
+
+        <label>After Refueling Photo <span class="hint" style="font-weight:400;">(optional)</span></label>
+        <div class="photo-capture" id="afterPhotoWrap">
+          <input type="file" accept="image/*" capture="environment" id="afterPhotoInput" style="display:none">
+          <button type="button" class="photo-btn" id="afterPhotoBtn">📷 Take After Photo</button>
+          <div class="photo-preview" id="afterPhotoPreview" style="display:none;">
+            <img id="afterPhotoImg" alt="After refueling photo">
+            <div class="photo-actions">
+              <label class="photo-confirm"><input type="checkbox" id="afterPhotoConfirm"> ✅ Photo is clear</label>
+              <button type="button" class="photo-retake" id="afterPhotoRetake">🔁 Retake</button>
+            </div>
+          </div>
+        </div>
+
         <button type="submit" id="submitBtn">Submit — Send to Diesel Team</button>
       </form>
 
@@ -500,6 +539,73 @@
       if (v) loadVehicleHistory(v);
     });
   });
+
+  /* ---------- Before/After Refueling photo capture (optional) ----------
+     Resizes/compresses on-device before it ever leaves the browser — a raw
+     phone-camera photo can be several MB, which is slow to upload and adds
+     up fast in Drive storage over hundreds of requests. */
+  function compressImage_(file, callback){
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var imgEl = new Image();
+      imgEl.onload = function(){
+        var maxDim = 1280;
+        var w = imgEl.width, h = imgEl.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+          else { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(imgEl, 0, 0, w, h);
+        callback(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      imgEl.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function setupPhotoCapture_(prefix){
+    var input = document.getElementById(prefix + 'PhotoInput');
+    var btn = document.getElementById(prefix + 'PhotoBtn');
+    var preview = document.getElementById(prefix + 'PhotoPreview');
+    var img = document.getElementById(prefix + 'PhotoImg');
+    var confirmBox = document.getElementById(prefix + 'PhotoConfirm');
+    var retakeBtn = document.getElementById(prefix + 'PhotoRetake');
+    var dataUrl = '';
+
+    btn.addEventListener('click', function(){ input.click(); });
+
+    input.addEventListener('change', function(){
+      var file = input.files && input.files[0];
+      if (!file) return;
+      compressImage_(file, function(compressed){
+        dataUrl = compressed;
+        img.src = dataUrl;
+        preview.style.display = 'block';
+        btn.style.display = 'none';
+        confirmBox.checked = false;
+      });
+    });
+
+    function reset(){
+      dataUrl = '';
+      input.value = '';
+      preview.style.display = 'none';
+      btn.style.display = 'block';
+      confirmBox.checked = false;
+    }
+    retakeBtn.addEventListener('click', reset);
+
+    return {
+      getDataUrl: function(){ return dataUrl; },
+      isConfirmed: function(){ return !dataUrl || confirmBox.checked; },
+      reset: reset
+    };
+  }
+
+  var beforePhoto = setupPhotoCapture_('before');
+  var afterPhoto = setupPhotoCapture_('after');
 
   /* ---------- Dropdown lists: one call + localStorage cache ----------
      Apps Script takes ~2.5s per request (even for a tiny payload), so all
@@ -816,6 +922,14 @@
       driverNameAuto.focus();
       return;
     }
+    if (!beforePhoto.isConfirmed()) {
+      showMsg('err', '❌ Check "Photo is clear" under the Before Refueling photo before submitting (or retake it).');
+      return;
+    }
+    if (!afterPhoto.isConfirmed()) {
+      showMsg('err', '❌ Check "Photo is clear" under the After Refueling photo before submitting (or retake it).');
+      return;
+    }
 
     var payload = {
       action: 'createOffice',
@@ -829,7 +943,9 @@
       routeTrip: document.getElementById('routeTrip').value.trim(),
       currentLocation: currentLocationInput.value.trim(),
       requestedBy: document.getElementById('requestedBy').value.trim(),
-      callingRemarks: document.getElementById('callingRemarks').value.trim()
+      callingRemarks: document.getElementById('callingRemarks').value.trim(),
+      beforePhoto: beforePhoto.getDataUrl(),
+      afterPhoto: afterPhoto.getDataUrl()
     };
 
     submitBtn.disabled = true;
@@ -856,6 +972,8 @@
         contactNumber.readOnly = false;
         locationInfo.className = 'driver-info';
         vehicleHistoryBox.style.display = 'none';
+        beforePhoto.reset();
+        afterPhoto.reset();
       } else {
         showMsg('err', '❌ Error: ' + res.error);
       }

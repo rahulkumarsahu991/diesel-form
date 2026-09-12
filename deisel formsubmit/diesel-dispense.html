@@ -136,6 +136,11 @@
   .rc-source-tag{display:inline-block;margin-top:5px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;
     background:rgba(139,58,183,.14);color:#7c3aed;text-transform:uppercase;letter-spacing:.3px;}
   .rc-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+  .rc-photos{display:flex;gap:10px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);}
+  .rc-photo-link{display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;}
+  .rc-photo-link img{width:72px;height:72px;object-fit:cover;border-radius:9px;border:1px solid var(--border);
+    box-shadow:0 2px 6px rgba(16,19,46,.15);}
+  .rc-photo-link span{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
   .req-card .rc-liters{font-weight:700;color:var(--green-dark);white-space:nowrap;}
   .rc-print-btn{background:none;border:none;font-size:16px;line-height:1;cursor:pointer;padding:6px;margin:-6px;
     color:var(--muted);flex-shrink:0;border-radius:6px;}
@@ -825,6 +830,14 @@
     }
     card.appendChild(head);
 
+    var photosHtml = '';
+    if (r.beforePhoto || r.afterPhoto) {
+      photosHtml = '<div class="rc-photos">' +
+        (r.beforePhoto ? '<a href="' + esc(r.beforePhoto) + '" target="_blank" rel="noopener" class="rc-photo-link"><img src="' + esc(r.beforePhoto) + '" alt="Before refueling"><span>Before</span></a>' : '') +
+        (r.afterPhoto ? '<a href="' + esc(r.afterPhoto) + '" target="_blank" rel="noopener" class="rc-photo-link"><img src="' + esc(r.afterPhoto) + '" alt="After refueling"><span>After</span></a>' : '') +
+        '</div>';
+    }
+
     var body = document.createElement('div');
     body.className = 'req-card-body';
     body.innerHTML =
@@ -840,7 +853,8 @@
       row('Rate per Liter', r.ratePerLiter ? '₹ ' + r.ratePerLiter : '-') +
       row('Amount', r.amount ? '₹ ' + r.amount : '-') +
       row('Dispensed By', r.dispensedBy || '-') +
-      row('Receipt No', r.receiptNo || '-');
+      row('Receipt No', r.receiptNo || '-') +
+      photosHtml;
 
     if (r.status === 'Approved') {
       var useBtn = document.createElement('button');
