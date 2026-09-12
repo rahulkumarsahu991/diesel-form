@@ -405,12 +405,15 @@ function getPhotoFolder_() {
 }
 
 // dataUrl looks like "data:image/jpeg;base64,...." (built client-side after
-// resizing/compressing the photo). Returns a direct-viewable Drive URL
-// ("uc?export=view" — works both as an <img src> and a normal link, unlike
-// the default Drive file.getUrl() which opens the Drive viewer UI), or ''
-// if no photo was provided. Wrapped so a Drive/sharing hiccup never blocks
-// the rest of the submission — the request still saves, just without that
-// photo's link.
+// resizing/compressing the photo). Returns a Drive thumbnail-endpoint URL —
+// NOTE: plain "uc?export=view" links open fine when navigated to directly,
+// but Drive blocks them when loaded as an <img> subresource (confirmed by
+// testing — naturalWidth/Height come back 0). The "thumbnail" endpoint is
+// the one Drive actually serves reliably for embedding, so both the Diesel
+// Team's <img> thumbnails and a click-through to view it full-size use this
+// same URL. Returns '' if no photo was provided. Wrapped so a Drive/sharing
+// hiccup never blocks the rest of the submission — the request still saves,
+// just without that photo's link.
 function uploadPhotoFromDataUrl_(dataUrl, filename) {
   if (!dataUrl) return '';
   try {
@@ -422,7 +425,7 @@ function uploadPhotoFromDataUrl_(dataUrl, filename) {
     var blob = Utilities.newBlob(bytes, mimeType, filename + '.' + ext);
     var file = getPhotoFolder_().createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    return 'https://drive.google.com/uc?export=view&id=' + file.getId();
+    return 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w2000';
   } catch (err) {
     Logger.log('Photo upload failed for ' + filename + ': ' + err.message);
     return '';
