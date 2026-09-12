@@ -599,6 +599,7 @@
     var img = document.getElementById(prefix + 'PhotoImg');
     var confirmBox = document.getElementById(prefix + 'PhotoConfirm');
     var retakeBtn = document.getElementById(prefix + 'PhotoRetake');
+    var originalLabel = btn.textContent;
     var dataUrl = '';
 
     btn.addEventListener('click', function(){ input.click(); });
@@ -606,11 +607,15 @@
     input.addEventListener('change', function(){
       var file = input.files && input.files[0];
       if (!file) return;
+      btn.disabled = true;
+      btn.textContent = '⏳ Processing photo...';
       compressImage_(file, function(compressed){
         dataUrl = compressed;
         img.src = dataUrl;
         preview.style.display = 'block';
         btn.style.display = 'none';
+        btn.disabled = false;
+        btn.textContent = originalLabel;
         confirmBox.checked = false;
         input.value = ''; // release the original full-size file from the input
         saveDraft_(); // photo survives even if the camera hand-off reloads the page
@@ -620,6 +625,7 @@
     function reset(){
       dataUrl = '';
       input.value = '';
+      btn.textContent = originalLabel;
       preview.style.display = 'none';
       btn.style.display = 'block';
       confirmBox.checked = false;
