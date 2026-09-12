@@ -471,6 +471,11 @@ function createOfficeRequest_(body) {
     row[COL.BEFORE_PHOTO - 1] = beforePhotoUrl;
     row[COL.AFTER_PHOTO - 1] = afterPhotoUrl;
 
+    // Plain-text format BEFORE writing — otherwise Sheets silently auto-
+    // converts a recognized Drive link into a "Smart Chip", and getValues()
+    // then returns the chip's display name (e.g. "OT001_before.png")
+    // instead of the URL, breaking every reader of this column.
+    sheet.getRange(nextRow, COL.BEFORE_PHOTO, 1, 2).setNumberFormat('@');
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush();
     return { ok: true, requestId: id };
@@ -937,6 +942,10 @@ function addPhotoColumns() {
   [getSheet_(), getOfficeSheet_()].forEach(function(sheet) {
     sheet.getRange(1, COL.BEFORE_PHOTO).setValue('Before Refueling Photo');
     sheet.getRange(1, COL.AFTER_PHOTO).setValue('After Refueling Photo');
+    // Whole-column plain-text format so Sheets never auto-chips a Drive
+    // link written into these columns (see the comment in
+    // createOfficeRequest_ for why that silently breaks getValues()).
+    sheet.getRange(1, COL.BEFORE_PHOTO, sheet.getMaxRows(), 2).setNumberFormat('@');
   });
   Logger.log('Photo columns added to both sheets.');
 }
