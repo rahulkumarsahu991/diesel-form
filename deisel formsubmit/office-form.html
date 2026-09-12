@@ -537,6 +537,7 @@
       // Re-check refueling history under the newly selected fuel type
       var v = vehicleInput.value.trim();
       if (v) loadVehicleHistory(v);
+      saveDraft_(); // outside <form>, so the delegated form listener won't catch this
     });
   });
 
@@ -549,7 +550,7 @@
     reader.onload = function(e){
       var imgEl = new Image();
       imgEl.onload = function(){
-        var maxDim = 1280;
+        var maxDim = 1024;
         var w = imgEl.width, h = imgEl.height;
         if (w > maxDim || h > maxDim) {
           if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
@@ -558,7 +559,11 @@
         var canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d').drawImage(imgEl, 0, 0, w, h);
-        callback(canvas.toDataURL('image/jpeg', 0.7));
+        callback(canvas.toDataURL('image/jpeg', 0.6));
+        // Free the decoded bitmap ASAP — on low-RAM phones, holding this
+        // (plus the original file) alongside the camera app's own memory
+        // use is what tends to make the OS kill/reload the browser tab.
+        imgEl.src = '';
       };
       imgEl.src = e.target.result;
     };
@@ -585,6 +590,8 @@
         preview.style.display = 'block';
         btn.style.display = 'none';
         confirmBox.checked = false;
+        input.value = ''; // release the original full-size file from the input
+        saveDraft_(); // photo survives even if the camera hand-off reloads the page
       });
     });
 
@@ -595,17 +602,98 @@
       btn.style.display = 'block';
       confirmBox.checked = false;
     }
-    retakeBtn.addEventListener('click', reset);
+    retakeBtn.addEventListener('click', function(){ reset(); saveDraft_(); });
 
     return {
       getDataUrl: function(){ return dataUrl; },
       isConfirmed: function(){ return !dataUrl || confirmBox.checked; },
-      reset: reset
+      reset: reset,
+      restore: function(savedDataUrl, confirmed){
+        dataUrl = savedDataUrl;
+        img.src = dataUrl;
+        preview.style.display = 'block';
+        btn.style.display = 'none';
+        confirmBox.checked = !!confirmed;
+      }
     };
   }
 
   var beforePhoto = setupPhotoCapture_('before');
   var afterPhoto = setupPhotoCapture_('after');
+
+  /* ---------- Draft auto-save/restore ----------
+     Taking a photo hands control to the camera app; on lower-RAM phones the
+     browser tab can get discarded and reloaded by the OS when it comes back
+     (a known mobile-browser behavior, not something a webpage can prevent
+     outright) — which used to mean losing everything typed so far. Every
+     field (including captured photos) is now auto-saved to localStorage as
+     the user fills the form, and restored on load, so a mid-fill reload
+     costs at most a re-check, not a redo. Cleared once the request submits. */
+  var DRAFT_KEY = 'officeFormDraft';
+  var draftSaveTimer = null;
+
+  function saveDraft_(){
+    clearTimeout(draftSaveTimer);
+    draftSaveTimer = setTimeout(function(){
+      try {
+        var draft = {
+          fuelType: selectedFuelType,
+          vehicleNo: vehicleInput.value,
+          driverId: driverIdInput.value,
+          driverName: driverNameAuto.value,
+          contactNumber: contactNumber.value,
+          odometerKm: document.getElementById('odometerKm').value,
+          requestedLiters: document.getElementById('requestedLiters').value,
+          routeTrip: document.getElementById('routeTrip').value,
+          currentLocation: currentLocationInput.value,
+          requestedBy: document.getElementById('requestedBy').value,
+          callingRemarks: document.getElementById('callingRemarks').value,
+          beforePhoto: beforePhoto.getDataUrl(),
+          beforePhotoConfirmed: document.getElementById('beforePhotoConfirm').checked,
+          afterPhoto: afterPhoto.getDataUrl(),
+          afterPhotoConfirmed: document.getElementById('afterPhotoConfirm').checked
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      } catch (e) { /* storage full/unavailable — draft just won't persist */ }
+    }, 400);
+  }
+
+  function clearDraft_(){
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+  }
+
+  function restoreDraft_(){
+    var raw;
+    try { raw = localStorage.getItem(DRAFT_KEY); } catch (e) { return; }
+    if (!raw) return;
+    var draft;
+    try { draft = JSON.parse(raw); } catch (e) { return; }
+    if (!draft) return;
+
+    vehicleInput.value = draft.vehicleNo || '';
+    driverIdInput.value = draft.driverId || '';
+    driverNameAuto.value = draft.driverName || '';
+    contactNumber.value = draft.contactNumber || '';
+    document.getElementById('odometerKm').value = draft.odometerKm || '';
+    document.getElementById('requestedLiters').value = draft.requestedLiters || '';
+    document.getElementById('routeTrip').value = draft.routeTrip || '';
+    currentLocationInput.value = draft.currentLocation || '';
+    document.getElementById('requestedBy').value = draft.requestedBy || '';
+    document.getElementById('callingRemarks').value = draft.callingRemarks || '';
+
+    if (draft.fuelType === 'Urea') document.querySelector('.fuel-mode[data-fuel="Urea"]').click();
+    if (draft.beforePhoto) beforePhoto.restore(draft.beforePhoto, draft.beforePhotoConfirmed);
+    if (draft.afterPhoto) afterPhoto.restore(draft.afterPhoto, draft.afterPhotoConfirmed);
+
+    var hasAnything = draft.vehicleNo || draft.driverName || draft.beforePhoto || draft.afterPhoto;
+    if (hasAnything) {
+      if (vehicleInput.value.trim()) { loadVehicleHistory(vehicleInput.value.trim()); lookupDriverForVehicle(vehicleInput.value.trim()); }
+      showMsg('ok', '📝 Restored your unsaved entry (the page reloaded — this can happen after using the camera). Please recheck everything, then submit.');
+    }
+  }
+
+  form.addEventListener('input', saveDraft_);
+  form.addEventListener('change', saveDraft_);
 
   /* ---------- Dropdown lists: one call + localStorage cache ----------
      Apps Script takes ~2.5s per request (even for a tiny payload), so all
@@ -974,6 +1062,7 @@
         vehicleHistoryBox.style.display = 'none';
         beforePhoto.reset();
         afterPhoto.reset();
+        clearDraft_();
       } else {
         showMsg('err', '❌ Error: ' + res.error);
       }
@@ -1218,6 +1307,10 @@
         .catch(function(){ updatedEl.textContent = 'Update failed — retrying...'; });
     }
   })();
+
+  // Runs last — every field it touches (vehicleInput, driverIdInput, etc.)
+  // is assigned by this point.
+  restoreDraft_();
 </script>
 </body>
 </html>
