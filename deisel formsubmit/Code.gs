@@ -82,51 +82,6 @@ function registerManagerToken_(body) {
   return { ok: true };
 }
 
-// Temporary diagnostic endpoint (?action=debugNotif) while setting up push
-// notifications — shows whether any device has registered, and whether the
-// service-account -> OAuth token exchange works, without needing to dig
-// through the Executions log.
-function debugNotif_() {
-  var tokens = getManagerTokens_();
-  var accessToken = null;
-  var oauthError = null;
-  try {
-    accessToken = getFcmAccessToken_();
-  } catch (e) {
-    oauthError = e.message;
-  }
-
-  var sendResults = [];
-  if (accessToken && tokens.length) {
-    tokens.forEach(function(token){
-      var message = {
-        message: {
-          token: token,
-          notification: { title: '🧪 Debug Test', body: 'If you see this, push works!' },
-          webpush: { fcm_options: { link: 'https://diesel-form.vercel.app/manager-approval.html' } }
-        }
-      };
-      var res = UrlFetchApp.fetch('https://fcm.googleapis.com/v1/projects/' + FCM_PROJECT_ID + '/messages:send', {
-        method: 'post',
-        contentType: 'application/json',
-        headers: { Authorization: 'Bearer ' + accessToken },
-        payload: JSON.stringify(message),
-        muteHttpExceptions: true
-      });
-      sendResults.push({ code: res.getResponseCode(), body: res.getContentText() });
-    });
-  }
-
-  return {
-    ok: true,
-    tokenCount: tokens.length,
-    tokenPreviews: tokens.map(function(t){ return t.substring(0, 24) + '...'; }),
-    oauthWorks: !!accessToken,
-    oauthError: oauthError,
-    sendResults: sendResults
-  };
-}
-
 // Signs a JWT with the service account's private key and exchanges it for a
 // short-lived OAuth2 access token — this is what FCM's v1 send API requires
 // instead of the old single "server key". Cached for ~55min since a fresh
@@ -291,7 +246,6 @@ function doGet(e) {
         routes: r.ok ? r.routes : []
       });
     }
-    if (action === 'debugNotif') return jsonOut_(debugNotif_());
     return jsonOut_({ ok: false, error: 'Unknown action' });
   } catch (err) {
     return jsonOut_({ ok: false, error: err.message });
