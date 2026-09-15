@@ -95,12 +95,35 @@ function debugNotif_() {
   } catch (e) {
     oauthError = e.message;
   }
+
+  var sendResults = [];
+  if (accessToken && tokens.length) {
+    tokens.forEach(function(token){
+      var message = {
+        message: {
+          token: token,
+          notification: { title: '🧪 Debug Test', body: 'If you see this, push works!' },
+          webpush: { fcm_options: { link: 'https://diesel-form.vercel.app/manager-approval.html' } }
+        }
+      };
+      var res = UrlFetchApp.fetch('https://fcm.googleapis.com/v1/projects/' + FCM_PROJECT_ID + '/messages:send', {
+        method: 'post',
+        contentType: 'application/json',
+        headers: { Authorization: 'Bearer ' + accessToken },
+        payload: JSON.stringify(message),
+        muteHttpExceptions: true
+      });
+      sendResults.push({ code: res.getResponseCode(), body: res.getContentText() });
+    });
+  }
+
   return {
     ok: true,
     tokenCount: tokens.length,
     tokenPreviews: tokens.map(function(t){ return t.substring(0, 24) + '...'; }),
     oauthWorks: !!accessToken,
-    oauthError: oauthError
+    oauthError: oauthError,
+    sendResults: sendResults
   };
 }
 
