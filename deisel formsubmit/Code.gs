@@ -46,6 +46,127 @@ var ADMIN_RESET_PASSWORD = 'Daman@11';
 // Gate for the Director/Admin panel's per-row "✕" delete button.
 var DELETE_REQUEST_PASSWORD = 'Daman@#*11';
 
+// ---------- Push notifications (Manager gets pinged on every new Caller request) ----------
+// Firebase project "Diesel Approval Notifications". The service account below
+// is only used server-side to mint a short-lived OAuth token for sending pushes
+// via the FCM v1 API — it never reaches the browser.
+var FCM_PROJECT_ID = 'diesel-approval-notifications';
+var FCM_CLIENT_EMAIL = 'firebase-adminsdk-fbsvc@diesel-approval-notifications.iam.gserviceaccount.com';
+var FCM_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDMWhrHJmyAIJ1f\ntW18gr0i2z9nKn08eY/JuPFnKvO423ivwgORkjXRvagHMz/hT6z0lZhmvC4Dc0kv\nVcPmaVwxsLI+XzVptDxnVTJk41dK/GSQjJojQVhJf+y+PhXlngkY+Hfs++W2xs7r\nMV4JAda57g8mH4aOgci8aVP3ooOSMUl4sDKkP2UjOSuMSBkJR0EaqB/6BKRcKuA7\ngo+h21qI40xBVzomXeX2dyXPt2UvAIbsZNheHRZMuDzNqiaEtCNFWY5yl/CjzLGi\nTTRIQd4Me7OyUPJS7+btZVmKwz0DHIc5LJKnyHg8k1+t06YzXgqSp7YbpkN8D2Vj\nDdnnKlNpAgMBAAECggEAAeVMze/Kx2GmEvMKzxRsHvbD7tf29IZ8Tz2lXacJPtdf\nOtlQOoTN0TlAk5zO/aXXiPBRnW85QHsDfGW/4+DpjSSZTrR1wmyF3H+uuYg6OmcI\nERTJ+NaKPWErPtAgIamSCvam1Ce5oyKJ74HUMplDu4B30d2cN7FuT9Mjmaoa5AAs\nKGqUjiCqGD/Cga6a5ks9EtEomBocKEn/xsfif6+5QKcnW2nfBgyFaX24J8LPdXHL\nixcHvBlYu3OAiNFQ9C5jRIzSFDev7Dud3Z+JMvT0oWb9YFZRuY6dJyPM24ydZ9j9\nBIm6XnPacgTAn5LCv5Kde1wgQ9DVPZkh7RnzJfPJtQKBgQDvwGKRdXYUZe/urF24\nL7fO4hBxYKKnFwsXJXKMCdduLnpVmNfW3TGKf9dasXUirldxNnkjdrYZyUGDC9D5\n87Z2gRLgLtw/BsFlSaO5TToCaTD0N+63CwtL4ntXQ1E2wVwqjQ1LmNuXHi9qw1lv\nIouGFj3Yg1ax2hvTKoNOW5IBxQKBgQDaM4xtYL3xYwLe0YWWDauvIjFWZN9oArGG\nnlk5U46HTSulvOYgiJoMoGQPIWa5zP6CK+G0ZfoailAZCq6yRklLdr7fwVPmOLxl\nGpwM+idL9b4Q5OEKO3bEM42CH9h8S2uxIePqLglcL/o0322FxaRugp/FaFOyHVm3\noNrtCS2ZVQKBgFlR82b9u+AdmiXxUXktTe1li3qx5ecaTqdw7BwADqKd7jW1m7QQ\n9EQFHNZNBrbE/Q7QnJD5yR4SPLX10QVOJsw/iii7TJKukZ6KsNR4UQRU7EgQDn9j\nPfInjowUKE2d/BheNHXVnPnP5RqBbPBajmCGKMRhKgtYlsU1MXYf52WBAoGAOWZG\nEp/YV5+MKcFEOuzttOxxviBbBKlwudD9966bV8xdJwRCJVzJ6Xhn2fMXatkaOnQA\ns8v/tuublnrQ6eTDcy6Rl5rrzywtowsU8fT8UWcb0KXk7SQnYgWNvCVUdZ4Bfl9D\n7V6e57lXQIFl9kK/trJ2BSAkpD5EU6Hk9WXssOECgYAYzaZx1U56KlvUw+TnjUu6\ngdf3XgcsROHGWrCyIJFT0fx1YKvxWnslFkxPHRDVtfVBcf0m1ShPyGQf7Vq56CrE\nLHmu2DCr8O2NdH4YRO3ILXgv2LM9lKWlnvvDKwqFpWg09uZL/uIsorOiu8wc1hiy\n5IOTF2q/Dqu94u6cQGGO5g==\n-----END PRIVATE KEY-----\n';
+
+var MANAGER_TOKENS_PROP_KEY = 'managerFcmTokens';
+
+function getManagerTokens_() {
+  var raw = PropertiesService.getScriptProperties().getProperty(MANAGER_TOKENS_PROP_KEY);
+  if (!raw) return [];
+  try { return JSON.parse(raw); } catch (e) { return []; }
+}
+
+function saveManagerToken_(token) {
+  if (!token) return;
+  var tokens = getManagerTokens_();
+  if (tokens.indexOf(token) === -1) {
+    tokens.push(token);
+    PropertiesService.getScriptProperties().setProperty(MANAGER_TOKENS_PROP_KEY, JSON.stringify(tokens));
+  }
+}
+
+function removeManagerToken_(token) {
+  var tokens = getManagerTokens_().filter(function(t){ return t !== token; });
+  PropertiesService.getScriptProperties().setProperty(MANAGER_TOKENS_PROP_KEY, JSON.stringify(tokens));
+}
+
+function registerManagerToken_(body) {
+  if (!body.token) return { ok: false, error: 'No token provided' };
+  saveManagerToken_(body.token);
+  return { ok: true };
+}
+
+// Signs a JWT with the service account's private key and exchanges it for a
+// short-lived OAuth2 access token — this is what FCM's v1 send API requires
+// instead of the old single "server key". Cached for ~55min since a fresh
+// token is valid for 1hr and this is called on every new request.
+function getFcmAccessToken_() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('fcm_access_token');
+  if (cached) return cached;
+
+  function b64url(bytesOrString) {
+    return Utilities.base64EncodeWebSafe(bytesOrString).replace(/=+$/, '');
+  }
+
+  var header = { alg: 'RS256', typ: 'JWT' };
+  var now = Math.floor(Date.now() / 1000);
+  var claimSet = {
+    iss: FCM_CLIENT_EMAIL,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600,
+    iat: now
+  };
+  var toSign = b64url(JSON.stringify(header)) + '.' + b64url(JSON.stringify(claimSet));
+  var signatureBytes = Utilities.computeRsaSha256Signature(toSign, FCM_PRIVATE_KEY);
+  var jwt = toSign + '.' + b64url(signatureBytes);
+
+  var response = UrlFetchApp.fetch('https://oauth2.googleapis.com/token', {
+    method: 'post',
+    contentType: 'application/x-www-form-urlencoded',
+    payload: {
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt
+    },
+    muteHttpExceptions: true
+  });
+  var json = JSON.parse(response.getContentText());
+  if (!json.access_token) {
+    Logger.log('FCM OAuth token exchange failed: ' + response.getContentText());
+    return null;
+  }
+  cache.put('fcm_access_token', json.access_token, json.expires_in - 60);
+  return json.access_token;
+}
+
+// Pings every registered Manager device the moment a Caller submits a new
+// (Pending) request. Best-effort — wrapped so a Firebase/network hiccup here
+// never blocks the request itself from saving. A token that FCM reports as
+// invalid/unregistered (device uninstalled, permission revoked, etc.) is
+// pruned automatically.
+function sendManagerNotification_(id, vehicleNo, requestedBy) {
+  try {
+    var tokens = getManagerTokens_();
+    if (!tokens.length) return;
+    var accessToken = getFcmAccessToken_();
+    if (!accessToken) return;
+
+    var title = '🆕 New Diesel Request';
+    var body = (vehicleNo || 'Vehicle') + ' — requested by ' + (requestedBy || 'Calling Team') + ' (' + id + ')';
+
+    tokens.forEach(function(token) {
+      var message = {
+        message: {
+          token: token,
+          notification: { title: title, body: body },
+          webpush: { fcm_options: { link: 'https://diesel-form.vercel.app/manager-approval.html' } }
+        }
+      };
+      var res = UrlFetchApp.fetch('https://fcm.googleapis.com/v1/projects/' + FCM_PROJECT_ID + '/messages:send', {
+        method: 'post',
+        contentType: 'application/json',
+        headers: { Authorization: 'Bearer ' + accessToken },
+        payload: JSON.stringify(message),
+        muteHttpExceptions: true
+      });
+      var code = res.getResponseCode();
+      if (code !== 200) {
+        Logger.log('FCM send failed (' + code + '): ' + res.getContentText());
+        if (code === 404 || code === 400) removeManagerToken_(token);
+      }
+    });
+  } catch (err) {
+    Logger.log('sendManagerNotification_ error: ' + err.message);
+  }
+}
+
 // Source sheet for the vehicle list (Diesel Sheet), tab "fleet s vehical" — Column C
 var VEHICLE_SHEET_ID = '1EEks9zfIjnYKxARCN6nBTVTxboV19_i32Gg16BzGZdk';
 var VEHICLE_SHEET_NAME = 'fleet s vehical';
@@ -142,6 +263,7 @@ function doPost(e) {
     if (action === 'dispense') return jsonOut_(dispenseRequest_(body));
     if (action === 'clearAllData') return jsonOut_(clearAllData_(body));
     if (action === 'deleteRequest') return jsonOut_(deleteRequestRow_(body));
+    if (action === 'registerManagerToken') return jsonOut_(registerManagerToken_(body));
     return jsonOut_({ ok: false, error: 'Unknown action' });
   } catch (err) {
     return jsonOut_({ ok: false, error: err.message });
@@ -349,11 +471,12 @@ function nextRequestSeq_(sheet) {
 function createRequest_(body) {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
+  var id;
   try {
     var sheet = getSheet_();
     var nextRow = sheet.getLastRow() + 1;
     var seq = nextRequestSeq_(sheet);
-    var id = 'DSL' + pad_(seq, 3);
+    id = 'DSL' + pad_(seq, 3);
     var now = new Date();
 
     var row = [];
@@ -375,10 +498,13 @@ function createRequest_(body) {
 
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush(); // make sure this write is visible before the lock releases
-    return { ok: true, requestId: id };
   } finally {
     lock.releaseLock();
   }
+  // Outside the lock — this is a network call (JWT sign + OAuth + FCM send),
+  // no need to hold the sheet lock for it.
+  sendManagerNotification_(id, body.vehicleNo, body.requestedBy);
+  return { ok: true, requestId: id };
 }
 
 // Same idea as nextRequestSeq_() but scans for the highest OT### used.
