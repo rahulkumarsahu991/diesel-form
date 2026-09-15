@@ -413,6 +413,8 @@
     </div>
   </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
 <script>
   /* ---------- Login gate ---------- */
   (function(){
@@ -456,6 +458,60 @@
 
   // Paste the /exec URL here after deploying the Google Apps Script "Web App"
   var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbybGePj0rLOxG_xdK-XjXtipxm_izdiozm9rgWbKTsY7L7XbFhSrzgs86JNCWvxO-0ipw/exec";
+
+  /* ---------- Push notifications: ping this device when Manager approves ----------
+     Same setup as manager-approval.html — one-time permission prompt, then
+     registers this device's FCM token so approveRequest_ can push to it. */
+  (function(){
+    var firebaseConfig = {
+      apiKey: "AIzaSyAjgDscAwmwnyURrW52QFQb1NDBYcNqAzk",
+      authDomain: "diesel-approval-notifications.firebaseapp.com",
+      projectId: "diesel-approval-notifications",
+      storageBucket: "diesel-approval-notifications.firebasestorage.app",
+      messagingSenderId: "1004339629284",
+      appId: "1:1004339629284:web:7bd0b4af2cac90b8c4f0f1",
+      measurementId: "G-L8YZKZ6M0Y"
+    };
+    var VAPID_KEY = "BO7Ky5PMUmeMF9l86e6MMxBATyT8Fzt8DUGDzgEAudqzk-_BC-23NW7McGsP6wvA8CXzzFyPqiRAZjjuz4XOMaQ";
+
+    if (!('serviceWorker' in navigator) || !('Notification' in window) || !window.firebase) return;
+
+    firebase.initializeApp(firebaseConfig);
+    var messaging = firebase.messaging();
+
+    navigator.serviceWorker.register('/firebase-messaging-sw.js').then(function(registration){
+      function registerToken(){
+        messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: registration })
+          .then(function(token){
+            if (!token || !APPS_SCRIPT_URL) return;
+            fetch(APPS_SCRIPT_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({ action: 'registerDieselToken', token: token })
+            }).catch(function(){});
+          })
+          .catch(function(err){ console.log('FCM getToken failed:', err); });
+      }
+
+      if (Notification.permission === 'granted') {
+        registerToken();
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then(function(perm){
+          if (perm === 'granted') registerToken();
+        });
+      }
+
+      messaging.onMessage(function(payload){
+        var n = payload.notification || {};
+        if (Notification.permission === 'granted') {
+          registration.showNotification(n.title || '✅ Ready to Dispense', {
+            body: n.body || '',
+            icon: 'logo.png'
+          });
+        }
+      });
+    }).catch(function(err){ console.log('Service worker registration failed:', err); });
+  })();
 
   var verifiedRow = null;
 

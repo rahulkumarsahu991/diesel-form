@@ -167,6 +167,138 @@ function sendManagerNotification_(id, vehicleNo, requestedBy) {
   }
 }
 
+// ---------- Diesel Team push notifications (pinged when Manager approves) ----------
+var DIESEL_TOKENS_PROP_KEY = 'dieselFcmTokens';
+
+function getDieselTokens_() {
+  var raw = PropertiesService.getScriptProperties().getProperty(DIESEL_TOKENS_PROP_KEY);
+  if (!raw) return [];
+  try { return JSON.parse(raw); } catch (e) { return []; }
+}
+
+function saveDieselToken_(token) {
+  if (!token) return;
+  var tokens = getDieselTokens_();
+  if (tokens.indexOf(token) === -1) {
+    tokens.push(token);
+    PropertiesService.getScriptProperties().setProperty(DIESEL_TOKENS_PROP_KEY, JSON.stringify(tokens));
+  }
+}
+
+function removeDieselToken_(token) {
+  var tokens = getDieselTokens_().filter(function(t){ return t !== token; });
+  PropertiesService.getScriptProperties().setProperty(DIESEL_TOKENS_PROP_KEY, JSON.stringify(tokens));
+}
+
+function registerDieselToken_(body) {
+  if (!body.token) return { ok: false, error: 'No token provided' };
+  saveDieselToken_(body.token);
+  return { ok: true };
+}
+
+// Pings every registered Diesel Team device the moment a Manager approves a
+// request — that's their cue to go dispense it.
+function sendDieselNotification_(id, vehicleNo, approvedLiters) {
+  try {
+    var tokens = getDieselTokens_();
+    if (!tokens.length) return;
+    var accessToken = getFcmAccessToken_();
+    if (!accessToken) return;
+
+    var title = '✅ Ready to Dispense';
+    var body = (vehicleNo || 'Vehicle') + ' — ' + approvedLiters + 'L approved (' + id + ')';
+
+    tokens.forEach(function(token) {
+      var message = {
+        message: {
+          token: token,
+          notification: { title: title, body: body },
+          webpush: { fcm_options: { link: 'https://diesel-form.vercel.app/diesel-dispense.html' } }
+        }
+      };
+      var res = UrlFetchApp.fetch('https://fcm.googleapis.com/v1/projects/' + FCM_PROJECT_ID + '/messages:send', {
+        method: 'post',
+        contentType: 'application/json',
+        headers: { Authorization: 'Bearer ' + accessToken },
+        payload: JSON.stringify(message),
+        muteHttpExceptions: true
+      });
+      var code = res.getResponseCode();
+      if (code !== 200) {
+        Logger.log('FCM send failed (' + code + '): ' + res.getContentText());
+        if (code === 404 || code === 400) removeDieselToken_(token);
+      }
+    });
+  } catch (err) {
+    Logger.log('sendDieselNotification_ error: ' + err.message);
+  }
+}
+
+// ---------- Admin/Director push notifications (pinged on every new request AND every approval) ----------
+var ADMIN_TOKENS_PROP_KEY = 'adminFcmTokens';
+
+function getAdminTokens_() {
+  var raw = PropertiesService.getScriptProperties().getProperty(ADMIN_TOKENS_PROP_KEY);
+  if (!raw) return [];
+  try { return JSON.parse(raw); } catch (e) { return []; }
+}
+
+function saveAdminToken_(token) {
+  if (!token) return;
+  var tokens = getAdminTokens_();
+  if (tokens.indexOf(token) === -1) {
+    tokens.push(token);
+    PropertiesService.getScriptProperties().setProperty(ADMIN_TOKENS_PROP_KEY, JSON.stringify(tokens));
+  }
+}
+
+function removeAdminToken_(token) {
+  var tokens = getAdminTokens_().filter(function(t){ return t !== token; });
+  PropertiesService.getScriptProperties().setProperty(ADMIN_TOKENS_PROP_KEY, JSON.stringify(tokens));
+}
+
+function registerAdminToken_(body) {
+  if (!body.token) return { ok: false, error: 'No token provided' };
+  saveAdminToken_(body.token);
+  return { ok: true };
+}
+
+// Generic (title/body supplied by the caller) since Admin is pinged for
+// more than one kind of event — new request, approval, and potentially
+// more later.
+function sendAdminNotification_(title, body, link) {
+  try {
+    var tokens = getAdminTokens_();
+    if (!tokens.length) return;
+    var accessToken = getFcmAccessToken_();
+    if (!accessToken) return;
+
+    tokens.forEach(function(token) {
+      var message = {
+        message: {
+          token: token,
+          notification: { title: title, body: body },
+          webpush: { fcm_options: { link: link || 'https://diesel-form.vercel.app/index.html' } }
+        }
+      };
+      var res = UrlFetchApp.fetch('https://fcm.googleapis.com/v1/projects/' + FCM_PROJECT_ID + '/messages:send', {
+        method: 'post',
+        contentType: 'application/json',
+        headers: { Authorization: 'Bearer ' + accessToken },
+        payload: JSON.stringify(message),
+        muteHttpExceptions: true
+      });
+      var code = res.getResponseCode();
+      if (code !== 200) {
+        Logger.log('FCM send failed (' + code + '): ' + res.getContentText());
+        if (code === 404 || code === 400) removeAdminToken_(token);
+      }
+    });
+  } catch (err) {
+    Logger.log('sendAdminNotification_ error: ' + err.message);
+  }
+}
+
 // Source sheet for the vehicle list (Diesel Sheet), tab "fleet s vehical" — Column C
 var VEHICLE_SHEET_ID = '1EEks9zfIjnYKxARCN6nBTVTxboV19_i32Gg16BzGZdk';
 var VEHICLE_SHEET_NAME = 'fleet s vehical';
@@ -264,6 +396,8 @@ function doPost(e) {
     if (action === 'clearAllData') return jsonOut_(clearAllData_(body));
     if (action === 'deleteRequest') return jsonOut_(deleteRequestRow_(body));
     if (action === 'registerManagerToken') return jsonOut_(registerManagerToken_(body));
+    if (action === 'registerDieselToken') return jsonOut_(registerDieselToken_(body));
+    if (action === 'registerAdminToken') return jsonOut_(registerAdminToken_(body));
     return jsonOut_({ ok: false, error: 'Unknown action' });
   } catch (err) {
     return jsonOut_({ ok: false, error: err.message });
@@ -504,6 +638,7 @@ function createRequest_(body) {
   // Outside the lock — this is a network call (JWT sign + OAuth + FCM send),
   // no need to hold the sheet lock for it.
   sendManagerNotification_(id, body.vehicleNo, body.requestedBy);
+  sendAdminNotification_('🆕 New Diesel Request', (body.vehicleNo || 'Vehicle') + ' — requested by ' + (body.requestedBy || 'Calling Team') + ' (' + id + ')', 'https://diesel-form.vercel.app/index.html');
   return { ok: true, requestId: id };
 }
 
@@ -616,6 +751,7 @@ function approveRequest_(body) {
   }
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
+  var vehicleNo, approvedLiters, managerName;
   try {
     var found = findRow_(body.id);
     if (!found) return { ok: false, error: 'Request ID not found' };
@@ -639,10 +775,16 @@ function approveRequest_(body) {
     // filled in manually if ever needed.
     sheet.getRange(found.rowIndex, COL.APPROVED_AT).setValue(new Date());
 
-    return { ok: true, requestId: body.id };
+    vehicleNo = body.vehicleNo || found.values[COL.VEHICLE - 1];
+    approvedLiters = Number(body.approvedLiters) || 0;
+    managerName = body.managerName || '';
   } finally {
     lock.releaseLock();
   }
+  // Outside the lock — network calls, no need to hold the sheet lock for them.
+  sendDieselNotification_(body.id, vehicleNo, approvedLiters);
+  sendAdminNotification_('✅ Request Approved', vehicleNo + ' — ' + approvedLiters + 'L approved by ' + (managerName || 'Manager') + ' (' + body.id + ')', 'https://diesel-form.vercel.app/index.html');
+  return { ok: true, requestId: body.id };
 }
 
 function rejectRequest_(body) {
