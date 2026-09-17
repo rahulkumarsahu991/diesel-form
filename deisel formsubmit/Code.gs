@@ -623,7 +623,10 @@ function createRequest_(body) {
     row[COL.CURRENT_LOCATION - 1] = body.currentLocation || '';
     row[COL.ODOMETER - 1] = Number(body.odometerKm) || 0;
     row[COL.PUMP - 1] = body.pumpLocation || '';
-    row[COL.REQ_LITERS - 1] = Number(body.requestedLiters) || 0;
+    // "Full" (Full Tank checkbox on the Calling form) is kept as text, not
+    // coerced to a number — the Manager sets the actual approved liters.
+    row[COL.REQ_LITERS - 1] = (String(body.requestedLiters || '').trim().toLowerCase() === 'full')
+      ? 'Full' : (Number(body.requestedLiters) || 0);
     row[COL.REQ_BY - 1] = body.requestedBy || '';
     row[COL.CONTACT - 1] = body.contactNumber || '';
     row[COL.CALL_REMARKS - 1] = body.callingRemarks || '';

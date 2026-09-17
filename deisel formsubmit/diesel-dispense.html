@@ -872,7 +872,7 @@
         '<div class="rc-meta">By: ' + esc(r.requestedBy || '-') + ' • ' + fmtDate(r.createdAt) + '</div>' +
         officeTagHtml + fuelTagHtml +
       '</div>' +
-      '<div class="rc-right">' + printIconHtml + '<span class="rc-liters">' + esc(liters) + ' L</span><span class="rc-chevron">▾</span></div>';
+      '<div class="rc-right">' + printIconHtml + '<span class="rc-liters">' + esc(liters) + (String(liters).toLowerCase() === 'full' ? '' : ' L') + '</span><span class="rc-chevron">▾</span></div>';
     head.addEventListener('click', function(){
       var wasOpen = card.classList.contains('open');
       approvedList.querySelectorAll('.req-card.open').forEach(function(el){ el.classList.remove('open'); });

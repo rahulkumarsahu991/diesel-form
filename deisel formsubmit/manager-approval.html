@@ -568,7 +568,7 @@
     header.innerHTML =
       '<div>' +
         '<div class="req-id">' + esc(row.id) + '</div>' +
-        '<div class="card-summary">' + esc(row.vehicleNo || '-') + ' • ' + esc(row.driverName || '-') + ' • ' + esc(row.requestedLiters) + ' L</div>' +
+        '<div class="card-summary">' + esc(row.vehicleNo || '-') + ' • ' + esc(row.driverName || '-') + ' • ' + esc(row.requestedLiters) + (String(row.requestedLiters).toLowerCase() === 'full' ? '' : ' L') + '</div>' +
         '<div class="meta">' + metaParts.join(' • ') + '</div>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">' +

@@ -69,6 +69,9 @@
   .req-id{font-size:22px;font-weight:800;letter-spacing:.5px;margin:6px 0;color:var(--navy);}
   .hint{font-size:12px;color:var(--muted);margin-top:6px;}
   .req{color:var(--red);}
+  .full-tank-check{display:flex;align-items:center;gap:7px;margin-top:8px;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;}
+  .full-tank-check input{width:auto;margin:0;accent-color:var(--orange);}
+  input#requestedLiters[readonly]{background:var(--orange-light);color:var(--orange-dark);font-weight:700;}
 
   .autocomplete-wrap{position:relative;}
   .suggestions{position:absolute;top:100%;left:0;right:0;background:rgba(255,255,255,.92);border:1px solid var(--border);
@@ -333,6 +336,7 @@
 
         <label>Requested Liters <span class="req">*</span></label>
         <input type="number" id="requestedLiters" required min="1" step="0.1" placeholder="e.g. 100">
+        <label class="full-tank-check"><input type="checkbox" id="fullTankCheck"> ⛽ Full Tank (no specific quantity)</label>
 
         <label>Route / Trip</label>
         <div class="autocomplete-wrap">
@@ -545,6 +549,23 @@
   var vehicleInput = document.getElementById('vehicleNo');
   setupAutocomplete(vehicleInput, document.getElementById('vehicleSuggestions'), 'vehicles', function(v){ loadVehicleHistory(v); lookupDriverForVehicle(v); });
   setupAutocomplete(document.getElementById('routeTrip'), document.getElementById('routeSuggestions'), 'routes');
+
+  /* ---------- Full Tank checkbox: fills Requested Liters with "Full" ---------- */
+  (function(){
+    var checkbox = document.getElementById('fullTankCheck');
+    var litersInput = document.getElementById('requestedLiters');
+    checkbox.addEventListener('change', function(){
+      if (checkbox.checked) {
+        litersInput.type = 'text';
+        litersInput.value = 'Full';
+        litersInput.readOnly = true;
+      } else {
+        litersInput.type = 'number';
+        litersInput.value = '';
+        litersInput.readOnly = false;
+      }
+    });
+  })();
 
   /* ---------- Vehicle No -> last 5 refueling history ---------- */
   var vehicleHistoryBox = document.getElementById('vehicleHistory');
@@ -799,6 +820,9 @@
         myNameInput.value = payload.requestedBy;
         showMsg('ok', '✅ Request submitted! Give this Request ID to the Manager:<br><span class="req-id">' + res.requestId + '</span><div class="hint">The Manager will approve it, after which it will show directly to the Diesel Team.</div>');
         form.reset();
+        document.getElementById('fullTankCheck').checked = false;
+        document.getElementById('requestedLiters').type = 'number';
+        document.getElementById('requestedLiters').readOnly = false;
         fetchedDriver = null;
         driverInfo.className = 'driver-info';
         driverNameAuto.value = '';
