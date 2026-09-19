@@ -115,6 +115,8 @@
   input,textarea{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:7px;font-size:16px;font-family:inherit;background:#fff;}
   input:focus,textarea:focus{outline:none;border-color:var(--orange);}
   .full{grid-column:1/-1;}
+  .cp-img{width:100%;max-width:280px;max-height:220px;object-fit:cover;border-radius:10px;
+    border:1px solid var(--border);box-shadow:0 2px 8px rgba(16,19,46,.15);display:block;}
   .actions{display:flex;gap:10px;margin-top:14px;}
   .btn{flex:1;padding:11px;border-radius:8px;border:none;font-size:14px;font-weight:700;cursor:pointer;}
   .btn-approve{background:var(--green);color:#fff;}
@@ -595,6 +597,10 @@
         field('Odometer (KM)', 'odometerKm', row.odometerKm, false) +
         field('Requested Liters', 'requestedLiters', row.requestedLiters, false) +
         field('Approved Liters', 'approvedLiters', row.approvedLiters || row.requestedLiters, editable, 'number') +
+        (row.callerPhoto
+          ? '<div class="full"><label>Caller Photo <span style="font-weight:400;">(tap to open full size)</span></label>' +
+            '<a href="' + esc(row.callerPhoto) + '" target="_blank" rel="noopener"><img class="cp-img" src="' + esc(row.callerPhoto) + '" alt="Caller photo"></a></div>'
+          : '') +
         '<div class="full">' + fieldTextarea('Manager Remarks', 'managerRemarks', row.managerRemarks) + '</div>' +
       '</div>';
     card.appendChild(body);

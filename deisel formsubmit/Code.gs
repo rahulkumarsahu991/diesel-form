@@ -339,7 +339,8 @@ var HEADERS = [
   'Contact Number', 'Calling Remarks', 'Status', 'Manager Name',
   'Approved Liters', 'Manager Remarks', 'OTP', 'Approved At', 'Dispensed By',
   'Actual Liters Dispensed', 'Dispensed At', 'Receipt No', 'Current Location', 'Odometer KM',
-  'Rate Per Liter', 'Amount', 'Fuel Type', 'Before Refueling Photo', 'After Refueling Photo'
+  'Rate Per Liter', 'Amount', 'Fuel Type', 'Before Refueling Photo', 'After Refueling Photo',
+  'Caller Photo'
 ];
 
 // Column numbers (1-indexed) — matches the HEADERS array
@@ -351,7 +352,7 @@ var COL = {
   MGR_NAME: 13, APPROVED_LITERS: 14, MGR_REMARKS: 15, OTP: 16,
   APPROVED_AT: 17, DISP_BY: 18, ACTUAL_LITERS: 19, DISP_AT: 20, RECEIPT: 21,
   CURRENT_LOCATION: 22, ODOMETER: 23, RATE_PER_LITER: 24, AMOUNT: 25,
-  FUEL_TYPE: 26, BEFORE_PHOTO: 27, AFTER_PHOTO: 28
+  FUEL_TYPE: 26, BEFORE_PHOTO: 27, AFTER_PHOTO: 28, CALLER_PHOTO: 29
 };
 
 function doGet(e) {
@@ -419,7 +420,17 @@ function getSheet_() {
     sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
     sheet.setFrozenRows(1);
   }
+  ensureColumns_(sheet);
   return sheet;
+}
+
+// Every read/write here spans HEADERS.length columns; a sheet whose grid is
+// narrower than that (e.g. right after a new column is appended to HEADERS)
+// would throw "out of bounds" on the very next list/get call — so widen the
+// grid on demand instead of relying on someone remembering to.
+function ensureColumns_(sheet) {
+  var have = sheet.getMaxColumns();
+  if (have < HEADERS.length) sheet.insertColumnsAfter(have, HEADERS.length - have);
 }
 
 // Office Pump/Tanker Distribution Form's own tab — same column layout as
@@ -439,6 +450,7 @@ function getOfficeSheet_() {
     // layout/indices as "Requests" — just out of sight).
     sheet.hideColumns(COL.OTP);
   }
+  ensureColumns_(sheet);
   return sheet;
 }
 
@@ -475,7 +487,8 @@ function rowToObj_(row) {
     amount: row[COL.AMOUNT - 1],
     fuelType: row[COL.FUEL_TYPE - 1] || 'Diesel',
     beforePhoto: row[COL.BEFORE_PHOTO - 1] || '',
-    afterPhoto: row[COL.AFTER_PHOTO - 1] || ''
+    afterPhoto: row[COL.AFTER_PHOTO - 1] || '',
+    callerPhoto: row[COL.CALLER_PHOTO - 1] || ''
     // NOTE: OTP is deliberately not returned here (in list/get) — security
   };
 }
@@ -603,6 +616,17 @@ function nextRequestSeq_(sheet) {
 }
 
 function createRequest_(body) {
+  // Optional photo from the Calling form. Uploaded BEFORE taking the lock —
+  // the Drive upload takes a couple of seconds and callers submit all day, so
+  // holding the sheet lock for it would queue everyone else behind each
+  // photo. (Named by vehicle + time since the request ID isn't known yet.)
+  var callerPhotoUrl = '';
+  if (body.callerPhoto) {
+    var safeVehicle = String(body.vehicleNo || 'vehicle').replace(/[^A-Za-z0-9_-]/g, '');
+    callerPhotoUrl = uploadPhotoFromDataUrl_(body.callerPhoto,
+      'caller_' + safeVehicle + '_' + Utilities.formatDate(new Date(), TIMEZONE, 'yyyyMMdd-HHmmss'));
+  }
+
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   var id;
@@ -632,6 +656,16 @@ function createRequest_(body) {
     row[COL.CALL_REMARKS - 1] = body.callingRemarks || '';
     row[COL.STATUS - 1] = 'Pending';
     row[COL.FUEL_TYPE - 1] = 'Diesel';
+    row[COL.CALLER_PHOTO - 1] = callerPhotoUrl;
+
+    if (callerPhotoUrl) {
+      // Plain-text BEFORE writing so Sheets doesn't turn the Drive link into a
+      // Smart Chip (see createOfficeRequest_), and self-heal the header cell
+      // so nobody has to run a one-time utility for this new column.
+      sheet.getRange(nextRow, COL.CALLER_PHOTO).setNumberFormat('@');
+      var hdrCell = sheet.getRange(1, COL.CALLER_PHOTO);
+      if (!hdrCell.getValue()) hdrCell.setValue('Caller Photo');
+    }
 
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush(); // make sure this write is visible before the lock releases

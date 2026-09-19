@@ -609,7 +609,11 @@
       detailRow('Route / Trip', row.routeTrip || '-') +
       detailRow('Current Location', row.currentLocation || '-') +
       detailRow('Odometer (KM)', row.odometerKm || '-') +
-      detailRow('Approved Liters', row.approvedLiters);
+      detailRow('Approved Liters', row.approvedLiters) +
+      (row.callerPhoto
+        ? '<div class="row no-print"><span>Caller Photo</span><span><a href="' + esc(row.callerPhoto) + '" target="_blank" rel="noopener">' +
+          '<img src="' + esc(row.callerPhoto) + '" alt="Caller photo" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid #d1d5db;display:block;"></a></span></div>'
+        : '');
     document.getElementById('ratePerLiter').value = '';
     document.getElementById('amount').value = '';
     document.getElementById('dispenseCard').style.display = 'block';
@@ -887,8 +891,9 @@
     card.appendChild(head);
 
     var photosHtml = '';
-    if (r.beforePhoto || r.afterPhoto) {
+    if (r.callerPhoto || r.beforePhoto || r.afterPhoto) {
       photosHtml = '<div class="rc-photos">' +
+        (r.callerPhoto ? '<a href="' + esc(r.callerPhoto) + '" target="_blank" rel="noopener" class="rc-photo-link"><img src="' + esc(r.callerPhoto) + '" alt="Caller photo"><span>Caller</span></a>' : '') +
         (r.beforePhoto ? '<a href="' + esc(r.beforePhoto) + '" target="_blank" rel="noopener" class="rc-photo-link"><img src="' + esc(r.beforePhoto) + '" alt="Before refueling"><span>Before</span></a>' : '') +
         (r.afterPhoto ? '<a href="' + esc(r.afterPhoto) + '" target="_blank" rel="noopener" class="rc-photo-link"><img src="' + esc(r.afterPhoto) + '" alt="After refueling"><span>After</span></a>' : '') +
         '</div>';

@@ -73,6 +73,16 @@
   .full-tank-check input{width:auto;margin:0;accent-color:var(--orange);}
   input#requestedLiters[readonly]{background:var(--orange-light);color:var(--orange-dark);font-weight:700;}
 
+  .photo-capture{margin-top:4px;}
+  .photo-btn{width:100%;margin-top:0;padding:12px;background:#fff;color:var(--navy);border:1.5px dashed var(--border);
+    border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;}
+  .photo-btn:active{background:var(--orange-light);border-color:var(--orange);}
+  .photo-preview{margin-top:8px;border:1px solid var(--border);border-radius:10px;padding:8px;background:rgba(255,255,255,.7);}
+  .photo-preview img{width:100%;max-height:220px;object-fit:cover;border-radius:8px;display:block;}
+  .photo-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:8px;flex-wrap:wrap;}
+  .photo-retake{width:auto;margin:0;padding:7px 12px;background:#fff;color:var(--navy);border:1px solid var(--border);
+    border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;}
+
   .autocomplete-wrap{position:relative;}
   .suggestions{position:absolute;top:100%;left:0;right:0;background:rgba(255,255,255,.92);border:1px solid var(--border);
     border-top:none;border-radius:0 0 8px 8px;max-height:220px;overflow-y:auto;z-index:20;
@@ -357,6 +367,19 @@
         <label>Requested By (your name) <span class="req">*</span></label>
         <input type="text" id="requestedBy" required placeholder="Your name">
 
+        <label>Photo <span class="hint" style="font-weight:400;">(optional — camera or gallery)</span></label>
+        <div class="photo-capture">
+          <input type="file" accept="image/*" id="callerPhotoInput" style="display:none">
+          <button type="button" class="photo-btn" id="callerPhotoBtn">📷 Add Photo</button>
+          <div class="photo-preview" id="callerPhotoPreview" style="display:none;">
+            <img id="callerPhotoImg" alt="Request photo">
+            <div class="photo-actions">
+              <button type="button" class="photo-retake" id="callerPhotoChange">🔁 Change</button>
+              <button type="button" class="photo-retake" id="callerPhotoRemove">🗑️ Remove</button>
+            </div>
+          </div>
+        </div>
+
         <label>Remarks</label>
         <textarea id="callingRemarks" placeholder="Any extra info (optional)"></textarea>
 
@@ -549,6 +572,88 @@
   var vehicleInput = document.getElementById('vehicleNo');
   setupAutocomplete(vehicleInput, document.getElementById('vehicleSuggestions'), 'vehicles', function(v){ loadVehicleHistory(v); lookupDriverForVehicle(v); });
   setupAutocomplete(document.getElementById('routeTrip'), document.getElementById('routeSuggestions'), 'routes');
+
+  /* ---------- Optional request photo (camera or gallery) ----------
+     Shrunk on-device (max 1024px, JPEG q0.6) before upload. createImageBitmap
+     decodes the file directly — going through FileReader.readAsDataURL first
+     builds an 8-12MB base64 string of a phone original, which is what got
+     mobile browser tabs killed/reloaded on the Office form. */
+  var callerPhotoDataUrl = '';
+  var callerPhotoBusy = false;
+  var callerPhotoInput = document.getElementById('callerPhotoInput');
+  var callerPhotoBtn = document.getElementById('callerPhotoBtn');
+  var callerPhotoPreview = document.getElementById('callerPhotoPreview');
+  var callerPhotoImg = document.getElementById('callerPhotoImg');
+  var callerPhotoChange = document.getElementById('callerPhotoChange');
+  var callerPhotoRemove = document.getElementById('callerPhotoRemove');
+
+  function compressPhoto_(file, onOk, onErr){
+    var maxDim = 1024, quality = 0.6;
+    function fromSource(w0, h0, source, cleanup){
+      var w = w0, h = h0;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(source, 0, 0, w, h);
+      var out = canvas.toDataURL('image/jpeg', quality);
+      if (cleanup) cleanup();
+      onOk(out);
+    }
+    function fallback(){
+      var objectUrl = URL.createObjectURL(file);
+      var imgEl = new Image();
+      imgEl.onload = function(){ fromSource(imgEl.naturalWidth, imgEl.naturalHeight, imgEl, function(){ URL.revokeObjectURL(objectUrl); }); };
+      imgEl.onerror = function(){ URL.revokeObjectURL(objectUrl); onErr(); };
+      imgEl.src = objectUrl;
+    }
+    if (window.createImageBitmap) {
+      createImageBitmap(file).then(function(bitmap){
+        fromSource(bitmap.width, bitmap.height, bitmap, function(){ bitmap.close(); });
+      }).catch(fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  function resetCallerPhoto_(){
+    callerPhotoDataUrl = '';
+    callerPhotoInput.value = '';
+    callerPhotoPreview.style.display = 'none';
+    callerPhotoBtn.style.display = 'block';
+  }
+
+  callerPhotoBtn.addEventListener('click', function(){ callerPhotoInput.click(); });
+  callerPhotoChange.addEventListener('click', function(){ callerPhotoInput.click(); });
+  callerPhotoRemove.addEventListener('click', resetCallerPhoto_);
+
+  callerPhotoInput.addEventListener('change', function(){
+    var file = callerPhotoInput.files && callerPhotoInput.files[0];
+    if (!file) return;
+    callerPhotoBusy = true;
+    var btnLabel = callerPhotoBtn.textContent, changeLabel = callerPhotoChange.textContent;
+    callerPhotoBtn.disabled = true; callerPhotoChange.disabled = true;
+    callerPhotoBtn.textContent = '⏳ Processing photo...';
+    callerPhotoChange.textContent = '⏳ Processing...';
+    function done(){
+      callerPhotoBusy = false;
+      callerPhotoBtn.disabled = false; callerPhotoChange.disabled = false;
+      callerPhotoBtn.textContent = btnLabel; callerPhotoChange.textContent = changeLabel;
+      callerPhotoInput.value = ''; // release the full-size original
+    }
+    compressPhoto_(file, function(compressed){
+      callerPhotoDataUrl = compressed;
+      callerPhotoImg.src = compressed;
+      callerPhotoPreview.style.display = 'block';
+      callerPhotoBtn.style.display = 'none';
+      done();
+    }, function(){
+      done();
+      showMsg('err', '❌ Could not read that photo — please try a different one.');
+    });
+  });
 
   /* ---------- Full Tank checkbox: fills Requested Liters with "Full" ---------- */
   (function(){
@@ -789,6 +894,10 @@
       driverNameAuto.focus();
       return;
     }
+    if (callerPhotoBusy) {
+      showMsg('err', '⏳ Photo is still processing — wait a moment, then submit again.');
+      return;
+    }
 
     var payload = {
       action: 'create',
@@ -801,7 +910,8 @@
       routeTrip: document.getElementById('routeTrip').value.trim(),
       currentLocation: currentLocationInput.value.trim(),
       requestedBy: document.getElementById('requestedBy').value.trim(),
-      callingRemarks: document.getElementById('callingRemarks').value.trim()
+      callingRemarks: document.getElementById('callingRemarks').value.trim(),
+      callerPhoto: callerPhotoDataUrl
     };
 
     submitBtn.disabled = true;
@@ -823,6 +933,7 @@
         document.getElementById('fullTankCheck').checked = false;
         document.getElementById('requestedLiters').type = 'number';
         document.getElementById('requestedLiters').readOnly = false;
+        resetCallerPhoto_();
         fetchedDriver = null;
         driverInfo.className = 'driver-info';
         driverNameAuto.value = '';
