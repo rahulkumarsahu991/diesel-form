@@ -344,6 +344,20 @@
         <div id="voResults" class="vo-results"><div class="vo-hint">Loading...</div></div>
       </div>
     </div>
+
+    <div class="vo-panel">
+      <div class="vo-title">💳 Credit Diesel — logged directly by Calling Team, skips Manager &amp; Diesel Team</div>
+      <div class="vo-body">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Request ID</th><th>Date</th><th>Vehicle</th><th>Odometer (KM)</th><th>Driver</th><th>Liters</th><th>Requested By</th><th>Remarks</th><th></th></tr>
+            </thead>
+            <tbody id="creditBody"><tr><td colspan="9" class="ov-loading">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="clearDataOverlay" class="cd-overlay">
@@ -563,6 +577,43 @@
       });
   }
 
+  /* ---------- Credit Diesel — its own tab, only shown here ---------- */
+  var creditBody = document.getElementById('creditBody');
+  function loadCreditDiesel(){
+    if (!APPS_SCRIPT_URL) return;
+    fetch(APPS_SCRIPT_URL + '?action=list&source=credit&limit=300')
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (!res.ok) { creditBody.innerHTML = '<tr><td colspan="9" class="ov-empty">Error: ' + esc(res.error) + '</td></tr>'; return; }
+        if (!res.rows.length) { creditBody.innerHTML = '<tr><td colspan="9" class="ov-empty">No credit diesel entries yet.</td></tr>'; return; }
+        creditBody.innerHTML = res.rows.map(function(r){
+          return '<tr>' +
+            '<td data-label="Request ID" class="vsum"><b>' + esc(r.id) + '</b></td>' +
+            '<td data-label="Date" class="vsum">' + fmtDate(r.createdAt) + '</td>' +
+            '<td data-label="Vehicle" class="vsum">' + esc(r.vehicleNo) + '</td>' +
+            '<td data-label="Odometer (KM)">' + esc(r.odometerKm || '-') + '</td>' +
+            '<td data-label="Driver">' + esc(r.driverName || '-') + '</td>' +
+            '<td data-label="Liters">' + esc(r.requestedLiters) + '</td>' +
+            '<td data-label="Requested By">' + esc(r.requestedBy) + '</td>' +
+            '<td data-label="Remarks">' + esc(r.callingRemarks || '-') + '</td>' +
+            '<td class="del-cell"><button type="button" class="row-del-btn" data-id="' + esc(r.id) + '" title="Delete this entry">✕</button></td>' +
+          '</tr>';
+        }).join('');
+      })
+      .catch(function(err){
+        creditBody.innerHTML = '<tr><td colspan="9" class="ov-empty">Network error: ' + esc(err.message) + '</td></tr>';
+      });
+  }
+  creditBody.addEventListener('click', function(e){
+    var delBtn = e.target.closest('.row-del-btn');
+    if (delBtn) { openDeleteModal_(delBtn.getAttribute('data-id')); return; }
+    var tr = e.target.closest('tr');
+    if (!tr || tr.parentNode !== creditBody || !tr.querySelector('td.vsum')) return;
+    var wasOpen = tr.classList.contains('expanded');
+    creditBody.querySelectorAll('tr.expanded').forEach(function(el){ el.classList.remove('expanded'); });
+    if (!wasOpen) tr.classList.add('expanded');
+  });
+
   function renderStats(){
     var visible = dateFilteredRequests_();
     var counts = { Pending: 0, Approved: 0, Rejected: 0, Dispensed: 0 };
@@ -661,6 +712,7 @@
       if (!res.ok) { delErr.textContent = '❌ ' + res.error; return; }
       delOverlay.classList.remove('show');
       loadOverview();
+      loadCreditDiesel();
     })
     .catch(function(err){ delErr.textContent = '❌ Network error: ' + err.message; })
     .finally(function(){
@@ -820,6 +872,7 @@
   });
 
   loadOverview();
+  loadCreditDiesel();
 </script>
 </body>
 </html>

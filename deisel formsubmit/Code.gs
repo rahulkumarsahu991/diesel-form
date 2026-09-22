@@ -36,6 +36,7 @@
 
 var SHEET_NAME = 'Requests';
 var OFFICE_SHEET_NAME = 'Office-Tanker'; // Office Pump/Tanker Distribution Form — separate tab, IDs prefixed "OT"
+var CREDIT_SHEET_NAME = 'Credit Diesel'; // Calling form's "Credit Diesel" checkbox — separate tab, IDs prefixed "CR"
 var TIMEZONE = 'Asia/Kolkata';
 
 // Gate for the "Clear All Data" button on index.html (Director/Developer view only).
@@ -391,6 +392,7 @@ function doPost(e) {
     var action = body.action;
     if (action === 'create') return jsonOut_(createRequest_(body));
     if (action === 'createOffice') return jsonOut_(createOfficeRequest_(body));
+    if (action === 'createCredit') return jsonOut_(createCreditRequest_(body));
     if (action === 'approve') return jsonOut_(approveRequest_(body));
     if (action === 'reject') return jsonOut_(rejectRequest_(body));
     if (action === 'dispense') return jsonOut_(dispenseRequest_(body));
@@ -454,9 +456,30 @@ function getOfficeSheet_() {
   return sheet;
 }
 
-// Which sheet a Request ID lives in, based on its "OT" vs "DSL" prefix.
+// Credit Diesel entries live on their own tab — same column layout (reuses
+// HEADERS/COL), created straight in "Credit" status with no Manager/Diesel
+// Team workflow attached, so nothing about how listRequests_' source param
+// works needs to change for the other two sheets to stay blind to it.
+function getCreditSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(CREDIT_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(CREDIT_SHEET_NAME);
+  }
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    sheet.setFrozenRows(1);
+  }
+  ensureColumns_(sheet);
+  return sheet;
+}
+
+// Which sheet a Request ID lives in, based on its "OT"/"CR" vs "DSL" prefix.
 function sheetForId_(id) {
-  return /^OT/i.test(String(id || '')) ? getOfficeSheet_() : getSheet_();
+  var s = String(id || '');
+  if (/^OT/i.test(s)) return getOfficeSheet_();
+  if (/^CR/i.test(s)) return getCreditSheet_();
+  return getSheet_();
 }
 
 function rowToObj_(row) {
@@ -507,6 +530,8 @@ function listRequests_(status, by, limit, source) {
   var rows;
   if (source === 'office') {
     rows = readRequestRows_(getOfficeSheet_(), status, by);
+  } else if (source === 'credit') {
+    rows = readRequestRows_(getCreditSheet_(), status, by);
   } else if (source === 'all') {
     rows = readRequestRows_(getSheet_(), status, by).concat(readRequestRows_(getOfficeSheet_(), status, by));
   } else {
@@ -676,6 +701,74 @@ function createRequest_(body) {
   // no need to hold the sheet lock for it.
   sendManagerNotification_(id, body.vehicleNo, body.requestedBy);
   sendAdminNotification_('🆕 New Diesel Request', (body.vehicleNo || 'Vehicle') + ' — requested by ' + (body.requestedBy || 'Calling Team') + ' (' + id + ')', 'https://diesel-form.vercel.app/index.html');
+  return { ok: true, requestId: id };
+}
+
+// Same idea as nextRequestSeq_() but scans for the highest CR### used.
+function nextCreditRequestSeq_(sheet) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 1;
+  var ids = sheet.getRange(2, COL.ID, lastRow - 1, 1).getValues();
+  var maxSeq = 0;
+  for (var i = 0; i < ids.length; i++) {
+    var m = String(ids[i][0] || '').match(/^CR(\d+)$/);
+    if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
+  }
+  return maxSeq + 1;
+}
+
+// Calling form's "Credit Diesel" checkbox — diesel already given out on
+// credit somewhere else, being logged here purely for the record. Written
+// straight into its own "Credit Diesel" tab with status "Credit" — it never
+// enters the Manager/Diesel Team workflow at all (different sheet, and not
+// part of source='all' either), only the Admin/Director dashboard reads it.
+function createCreditRequest_(body) {
+  var callerPhotoUrl = '';
+  if (body.callerPhoto) {
+    var safeVehicle = String(body.vehicleNo || 'vehicle').replace(/[^A-Za-z0-9_-]/g, '');
+    callerPhotoUrl = uploadPhotoFromDataUrl_(body.callerPhoto,
+      'credit_' + safeVehicle + '_' + Utilities.formatDate(new Date(), TIMEZONE, 'yyyyMMdd-HHmmss'));
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  var id;
+  try {
+    var sheet = getCreditSheet_();
+    var nextRow = sheet.getLastRow() + 1;
+    var seq = nextCreditRequestSeq_(sheet);
+    id = 'CR' + pad_(seq, 3);
+    var now = new Date();
+
+    var row = [];
+    row[COL.ID - 1] = id;
+    row[COL.CREATED_AT - 1] = now;
+    row[COL.VEHICLE - 1] = body.vehicleNo || '';
+    row[COL.DRIVER_ID - 1] = body.driverId || '';
+    row[COL.DRIVER - 1] = body.driverName || '';
+    row[COL.ROUTE - 1] = body.routeTrip || '';
+    row[COL.CURRENT_LOCATION - 1] = body.currentLocation || '';
+    row[COL.ODOMETER - 1] = Number(body.odometerKm) || 0;
+    row[COL.REQ_LITERS - 1] = (String(body.requestedLiters || '').trim().toLowerCase() === 'full')
+      ? 'Full' : (Number(body.requestedLiters) || 0);
+    row[COL.REQ_BY - 1] = body.requestedBy || '';
+    row[COL.CONTACT - 1] = body.contactNumber || '';
+    row[COL.CALL_REMARKS - 1] = body.callingRemarks || '';
+    row[COL.STATUS - 1] = 'Credit';
+    row[COL.FUEL_TYPE - 1] = 'Diesel';
+    row[COL.CALLER_PHOTO - 1] = callerPhotoUrl;
+
+    if (callerPhotoUrl) {
+      sheet.getRange(nextRow, COL.CALLER_PHOTO).setNumberFormat('@');
+      var hdrCell = sheet.getRange(1, COL.CALLER_PHOTO);
+      if (!hdrCell.getValue()) hdrCell.setValue('Caller Photo');
+    }
+
+    sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
   return { ok: true, requestId: id };
 }
 
