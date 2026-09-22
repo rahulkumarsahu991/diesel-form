@@ -75,6 +75,7 @@
   .credit-check{color:#7c3aed;}
   .credit-check input{accent-color:#7c3aed;}
   .credit-check.active{background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.3);border-radius:8px;padding:8px 10px;margin-top:8px;}
+  .cr-tag{display:inline-block;background:#7c3aed;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:5px;letter-spacing:.3px;vertical-align:middle;}
 
   .photo-capture{margin-top:4px;}
   .photo-btn{width:100%;margin-top:0;padding:12px;background:#fff;color:var(--navy);border:1.5px dashed var(--border);
@@ -730,7 +731,8 @@
         vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last ' + entries.length + ' Refueling</div>' +
           '<table><thead><tr><th>Date</th><th>Liters</th><th>Odometer</th><th>Driver</th></tr></thead><tbody>' +
           entries.map(function(r){
-            return '<tr><td>' + fmtDate(r.dispensedAt) + '</td><td>' + esc(r.actualLiters) + '</td><td>' + esc(r.odometerKm || '-') + '</td><td>' + esc(r.driverName || '-') + '</td></tr>';
+            var litersCell = r.isCredit ? '<span class="cr-tag">CR</span> ' + esc(r.actualLiters) : esc(r.actualLiters);
+            return '<tr><td>' + fmtDate(r.dispensedAt) + '</td><td>' + litersCell + '</td><td>' + esc(r.odometerKm || '-') + '</td><td>' + esc(r.driverName || '-') + '</td></tr>';
           }).join('') + '</tbody></table>';
       })
       .catch(function(err){

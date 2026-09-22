@@ -567,11 +567,42 @@ function vehicleHistory_(vehicle, limit, fuelType) {
   if (!vehicle) return { ok: false, error: 'Provide a Vehicle No' };
   var target = String(vehicle).trim().toUpperCase();
   var max = Number(limit) || 5;
-  var rows = readVehicleHistoryRows_(getSheet_(), target, fuelType).concat(readVehicleHistoryRows_(getOfficeSheet_(), target, fuelType));
+  var rows = readVehicleHistoryRows_(getSheet_(), target, fuelType)
+    .concat(readVehicleHistoryRows_(getOfficeSheet_(), target, fuelType))
+    .concat(readCreditHistoryRows_(target, fuelType));
   // Row order != dispense order (an older request can still be dispensed later),
   // so we sort by actual dispense time before taking the latest N.
   rows.sort(function(a, b){ return new Date(b.dispensedAt) - new Date(a.dispensedAt); });
   return { ok: true, rows: rows.slice(0, max) };
+}
+
+// Credit Diesel entries never go through a real dispense event, so there's
+// no dispensedAt — the date it was logged stands in for it, and each row is
+// tagged isCredit so the frontend can show a "CR" marker instead of implying
+// it was a normal approved-and-dispensed fill.
+function readCreditHistoryRows_(target, fuelType) {
+  var sheet = getCreditSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var data = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
+  var rows = [];
+  for (var i = 0; i < data.length; i++) {
+    var r = data[i];
+    if (!r[COL.ID - 1]) continue;
+    if (String(r[COL.STATUS - 1]) !== 'Credit') continue;
+    if (String(r[COL.VEHICLE - 1] || '').trim().toUpperCase() !== target) continue;
+    if (fuelType && String(r[COL.FUEL_TYPE - 1] || 'Diesel') !== fuelType) continue;
+    rows.push({
+      dispensedAt: r[COL.CREATED_AT - 1],
+      actualLiters: r[COL.REQ_LITERS - 1],
+      odometerKm: r[COL.ODOMETER - 1],
+      driverName: r[COL.DRIVER - 1],
+      ratePerLiter: '',
+      amount: '',
+      isCredit: true
+    });
+  }
+  return rows;
 }
 
 // fuelType — optional ('Diesel'/'Urea'); when given, only rows of that fuel

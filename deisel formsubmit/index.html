@@ -67,6 +67,8 @@
   .ov-refresh{margin-left:auto;background:none !important;border:none !important;color:var(--gold) !important;}
   .ov-danger{background:rgba(220,38,38,.15) !important;border:1px solid rgba(220,38,38,.5) !important;color:#fca5a5 !important;}
   .ov-danger:active{background:rgba(220,38,38,.3) !important;}
+  .ov-credit{background:rgba(124,58,237,.18) !important;border:1px solid rgba(124,58,237,.5) !important;color:#c4b5fd !important;}
+  .ov-credit:active{background:rgba(124,58,237,.32) !important;}
 
   .date-filter{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-bottom:16px;
     background:rgba(255,255,255,.85);border:1px solid var(--glass-border);border-radius:16px;padding:14px 16px;
@@ -218,6 +220,19 @@
   .cd-overlay{position:fixed;inset:0;z-index:1100;display:none;align-items:center;justify-content:center;padding:20px;
     background:rgba(8,9,24,.72);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}
   .cd-overlay.show{display:flex;}
+
+  .credit-overlay{position:fixed;inset:0;z-index:1100;display:none;align-items:center;justify-content:center;padding:20px;
+    background:rgba(8,9,24,.72);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}
+  .credit-overlay.show{display:flex;}
+  .credit-modal{width:100%;max-width:980px;max-height:85vh;background:#fff;border:2px solid #7c3aed;border-radius:18px;
+    overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+  .credit-modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;
+    background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;font-size:14px;font-weight:800;flex-shrink:0;}
+  .credit-modal-head button{width:auto;padding:6px 10px;background:rgba(255,255,255,.18);border:none;border-radius:8px;
+    color:#fff;font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0;}
+  .credit-modal-head button:active{background:rgba(255,255,255,.32);}
+  .credit-modal-body{padding:16px 20px 20px;overflow-y:auto;}
+  .credit-modal .table-wrap{margin:0;}
   .cd-modal{width:100%;max-width:380px;background:#fff;border:2px solid #dc2626;border-radius:18px;padding:26px 24px;
     text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.4);}
   .cd-icon{font-size:34px;margin-bottom:6px;}
@@ -318,6 +333,7 @@
       <button class="ov-filter" data-status="Approved">Approved</button>
       <button class="ov-filter" data-status="Dispensed">Dispensed</button>
       <button class="ov-filter" data-status="Rejected">Rejected</button>
+      <button class="ov-credit" id="creditDieselBtn">💳 Credit Diesel</button>
       <button class="ov-danger" id="clearDataBtn">🗑️ Clear All Data</button>
       <button class="ov-refresh" id="ovRefresh">↻ Refresh</button>
     </div>
@@ -345,9 +361,15 @@
       </div>
     </div>
 
-    <div class="vo-panel">
-      <div class="vo-title">💳 Credit Diesel — logged directly by Calling Team, skips Manager &amp; Diesel Team</div>
-      <div class="vo-body">
+  </div>
+
+  <div id="creditOverlay" class="credit-overlay">
+    <div class="credit-modal">
+      <div class="credit-modal-head">
+        <span>💳 Credit Diesel — logged directly by Calling Team, skips Manager &amp; Diesel Team</span>
+        <button type="button" id="creditCloseBtn" title="Close">✕</button>
+      </div>
+      <div class="credit-modal-body">
         <div class="table-wrap">
           <table>
             <thead>
@@ -614,6 +636,14 @@
     if (!wasOpen) tr.classList.add('expanded');
   });
 
+  var creditOverlay = document.getElementById('creditOverlay');
+  document.getElementById('creditDieselBtn').addEventListener('click', function(){
+    creditOverlay.classList.add('show');
+    loadCreditDiesel();
+  });
+  document.getElementById('creditCloseBtn').addEventListener('click', function(){ creditOverlay.classList.remove('show'); });
+  creditOverlay.addEventListener('click', function(e){ if (e.target === creditOverlay) creditOverlay.classList.remove('show'); });
+
   function renderStats(){
     var visible = dateFilteredRequests_();
     var counts = { Pending: 0, Approved: 0, Rejected: 0, Dispensed: 0 };
@@ -872,7 +902,6 @@
   });
 
   loadOverview();
-  loadCreditDiesel();
 </script>
 </body>
 </html>
