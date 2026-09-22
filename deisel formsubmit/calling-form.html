@@ -157,6 +157,7 @@
   .status-Approved{background:#dcfce7;color:var(--green);}
   .status-Rejected{background:#fee2e2;color:var(--red);}
   .status-Dispensed{background:#dbeafe;color:#1d4ed8;}
+  .status-Credit{background:#ede9fe;color:#7c3aed;}
 
   .req-item{background:rgba(255,255,255,.85);border:1px solid var(--glass-border);border-radius:12px;margin-top:8px;overflow:hidden;
     box-shadow:0 4px 14px rgba(16,19,46,.12);backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%);
@@ -415,6 +416,7 @@
           <button class="my-filter" data-status="Approved">Approved</button>
           <button class="my-filter" data-status="Dispensed">Dispensed</button>
           <button class="my-filter" data-status="Rejected">Rejected</button>
+          <button class="my-filter" data-status="Credit">💳 Credit</button>
         </div>
         <div id="myReqList"></div>
       </div>
@@ -1056,15 +1058,25 @@
     var url = isAll
       ? APPS_SCRIPT_URL + '?action=list&limit=150'
       : APPS_SCRIPT_URL + '?action=list&by=' + encodeURIComponent(name);
+    // Credit Diesel entries live on a separate sheet (never mixed into the
+    // main Requests one), so they need their own fetch — merged into the
+    // same list afterward so the existing status-filter/render pipeline
+    // (including the "💳 Credit" tab) just works without special-casing.
+    var creditUrl = isAll
+      ? APPS_SCRIPT_URL + '?action=list&source=credit&limit=150'
+      : APPS_SCRIPT_URL + '?action=list&source=credit&by=' + encodeURIComponent(name);
     myReqList.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:13px;">Loading...</div>';
     // "All Requests" gets the latest 150 from the server; "Search by Name" filters by name on the server
-    fetch(url)
-      .then(function(r){ return r.json(); })
-      .then(function(res){
+    Promise.all([
+      fetch(url).then(function(r){ return r.json(); }),
+      fetch(creditUrl).then(function(r){ return r.json(); }).catch(function(){ return { ok: false, rows: [] }; })
+    ])
+      .then(function(results){
+        var res = results[0], creditRes = results[1];
         if (myMode !== (isAll ? 'all' : 'name')) return; // mode changed, ignore stale response
         if (!isAll && myNameInput.value.trim() !== name) return; // stale
         if (!res.ok) { myReqList.innerHTML = '<div style="padding:10px;color:var(--red);font-size:13px;">Error: ' + esc(res.error) + '</div>'; return; }
-        myAllRows = res.rows;
+        myAllRows = res.rows.concat(creditRes.ok ? creditRes.rows : []);
         renderMyStats();
         myStats.style.display = 'grid';
         myToolbar.style.display = 'flex';
@@ -1076,14 +1088,15 @@
   }
 
   function renderMyStats(){
-    var counts = { Pending: 0, Approved: 0, Rejected: 0, Dispensed: 0 };
+    var counts = { Pending: 0, Approved: 0, Rejected: 0, Dispensed: 0, Credit: 0 };
     myAllRows.forEach(function(r){ counts[r.status] = (counts[r.status] || 0) + 1; });
     var tiles = [
       { label: 'Total', num: myAllRows.length, accent: 'var(--navy)' },
       { label: 'Pending', num: counts.Pending, accent: '#d97706' },
       { label: 'Approved', num: counts.Approved, accent: 'var(--green)' },
       { label: 'Dispensed', num: counts.Dispensed, accent: '#1d4ed8' },
-      { label: 'Rejected', num: counts.Rejected, accent: 'var(--red)' }
+      { label: 'Rejected', num: counts.Rejected, accent: 'var(--red)' },
+      { label: 'Credit', num: counts.Credit, accent: '#7c3aed' }
     ];
     myStats.innerHTML = tiles.map(function(t){
       return '<div class="stat-tile" style="--accent:' + t.accent + '"><div class="num">' + t.num + '</div><div class="label">' + t.label + '</div></div>';
