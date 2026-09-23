@@ -300,9 +300,12 @@ function sendAdminNotification_(title, body, link) {
   }
 }
 
-// Source sheet for the vehicle list (Diesel Sheet), tab "fleet s vehical" — Column C
-var VEHICLE_SHEET_ID = '1EEks9zfIjnYKxARCN6nBTVTxboV19_i32Gg16BzGZdk';
-var VEHICLE_SHEET_NAME = 'fleet s vehical';
+// Source sheet for the vehicle list — tab "Calling Sheet", Column C.
+// NOTE: this used to be the "fleet s vehical" tab on a different spreadsheet
+// (below, still kept as PUMP_SHEET_ID since pumps still read from there) —
+// changed because that tab's Column C had gone empty.
+var VEHICLE_SHEET_ID = '1wgG2K9phHMQPvIskvXF1OBHxNHFk8pegrKCi0hvuF6U';
+var VEHICLE_SHEET_NAME = 'Calling Sheet';
 var VEHICLE_COL = 3; // Column C
 
 // Source sheet for the Driver ID -> Name/Mobile lookup
@@ -312,8 +315,9 @@ var DRIVER_ID_COL = 1;     // Column A
 var DRIVER_NAME_COL = 2;   // Column B
 var DRIVER_MOBILE_COL = 3; // Column C
 
-// Source sheet for the Pump/Location list (same file as vehicle list) — Column A
-var PUMP_SHEET_ID = VEHICLE_SHEET_ID;
+// Source sheet for the Pump/Location list — kept as its own hardcoded ID
+// (was previously aliased to VEHICLE_SHEET_ID, which now points elsewhere).
+var PUMP_SHEET_ID = '1EEks9zfIjnYKxARCN6nBTVTxboV19_i32Gg16BzGZdk';
 var PUMP_SHEET_NAME = 'NEW DIESEL&UREA';
 var PUMP_COL = 1; // Column A
 
@@ -1381,6 +1385,15 @@ function addPhotoColumns() {
     sheet.getRange(1, COL.AFTER_PHOTO, sheet.getMaxRows(), 1).setNumberFormat('@');
   });
   Logger.log('Photo columns added to both sheets.');
+}
+
+// One-time utility — run once if the vehicle-suggestion dropdown still shows
+// nothing right after switching VEHICLE_SHEET_ID/NAME to a new source. Not
+// normally needed (listVehicles_ never caches a truly empty result), but
+// covers the case where a previous empty read got cached before the switch.
+function clearVehicleListCache() {
+  CacheService.getScriptCache().remove('vehicle_list');
+  Logger.log('Vehicle list cache cleared — next load will read fresh from the sheet.');
 }
 
 var ARCHIVE_SHEET_NAME = 'Archive';
