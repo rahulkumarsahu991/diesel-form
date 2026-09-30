@@ -132,39 +132,53 @@ function getFcmAccessToken_() {
 // never blocks the request itself from saving. A token that FCM reports as
 // invalid/unregistered (device uninstalled, permission revoked, etc.) is
 // pruned automatically.
-function sendManagerNotification_(id, vehicleNo, requestedBy) {
+// Sends any number of FCM push messages in ONE parallel batch (UrlFetchApp.
+// fetchAll) instead of one UrlFetchApp.fetch() per token per recipient
+// group. This matters because every notification send used to happen
+// synchronously before the triggering request's HTTP response went back —
+// a Caller waiting on "Submitted!" or a Manager waiting on "Approved!" was
+// stuck behind however many sequential FCM calls (Manager + Admin, or
+// Diesel Team + Admin) that event fanned out to. Batching them cuts that
+// to roughly the time of the single slowest call.
+// groups: [{ tokens: [...], title, body, link, onInvalid: fn(token) }, ...]
+function sendPushBatch_(groups) {
   try {
-    var tokens = getManagerTokens_();
-    if (!tokens.length) return;
     var accessToken = getFcmAccessToken_();
     if (!accessToken) return;
 
-    var title = '🆕 New Diesel Request';
-    var body = (vehicleNo || 'Vehicle') + ' — requested by ' + (requestedBy || 'Calling Team') + ' (' + id + ')';
-
-    tokens.forEach(function(token) {
-      var message = {
-        message: {
-          token: token,
-          notification: { title: title, body: body },
-          webpush: { fcm_options: { link: 'https://diesel-form.vercel.app/manager-approval.html' } }
-        }
-      };
-      var res = UrlFetchApp.fetch('https://fcm.googleapis.com/v1/projects/' + FCM_PROJECT_ID + '/messages:send', {
-        method: 'post',
-        contentType: 'application/json',
-        headers: { Authorization: 'Bearer ' + accessToken },
-        payload: JSON.stringify(message),
-        muteHttpExceptions: true
+    var requests = [];
+    var meta = [];
+    groups.forEach(function(group) {
+      (group.tokens || []).forEach(function(token) {
+        requests.push({
+          url: 'https://fcm.googleapis.com/v1/projects/' + FCM_PROJECT_ID + '/messages:send',
+          method: 'post',
+          contentType: 'application/json',
+          headers: { Authorization: 'Bearer ' + accessToken },
+          payload: JSON.stringify({
+            message: {
+              token: token,
+              notification: { title: group.title, body: group.body },
+              webpush: { fcm_options: { link: group.link } }
+            }
+          }),
+          muteHttpExceptions: true
+        });
+        meta.push({ token: token, onInvalid: group.onInvalid });
       });
+    });
+    if (!requests.length) return;
+
+    var responses = UrlFetchApp.fetchAll(requests);
+    responses.forEach(function(res, i) {
       var code = res.getResponseCode();
       if (code !== 200) {
         Logger.log('FCM send failed (' + code + '): ' + res.getContentText());
-        if (code === 404 || code === 400) removeManagerToken_(token);
+        if ((code === 404 || code === 400) && meta[i].onInvalid) meta[i].onInvalid(meta[i].token);
       }
     });
   } catch (err) {
-    Logger.log('sendManagerNotification_ error: ' + err.message);
+    Logger.log('sendPushBatch_ error: ' + err.message);
   }
 }
 
@@ -199,42 +213,6 @@ function registerDieselToken_(body) {
 
 // Pings every registered Diesel Team device the moment a Manager approves a
 // request — that's their cue to go dispense it.
-function sendDieselNotification_(id, vehicleNo, approvedLiters) {
-  try {
-    var tokens = getDieselTokens_();
-    if (!tokens.length) return;
-    var accessToken = getFcmAccessToken_();
-    if (!accessToken) return;
-
-    var title = '✅ Ready to Dispense';
-    var body = (vehicleNo || 'Vehicle') + ' — ' + approvedLiters + 'L approved (' + id + ')';
-
-    tokens.forEach(function(token) {
-      var message = {
-        message: {
-          token: token,
-          notification: { title: title, body: body },
-          webpush: { fcm_options: { link: 'https://diesel-form.vercel.app/diesel-dispense.html' } }
-        }
-      };
-      var res = UrlFetchApp.fetch('https://fcm.googleapis.com/v1/projects/' + FCM_PROJECT_ID + '/messages:send', {
-        method: 'post',
-        contentType: 'application/json',
-        headers: { Authorization: 'Bearer ' + accessToken },
-        payload: JSON.stringify(message),
-        muteHttpExceptions: true
-      });
-      var code = res.getResponseCode();
-      if (code !== 200) {
-        Logger.log('FCM send failed (' + code + '): ' + res.getContentText());
-        if (code === 404 || code === 400) removeDieselToken_(token);
-      }
-    });
-  } catch (err) {
-    Logger.log('sendDieselNotification_ error: ' + err.message);
-  }
-}
-
 // ---------- Admin/Director push notifications (pinged on every new request AND every approval) ----------
 var ADMIN_TOKENS_PROP_KEY = 'adminFcmTokens';
 
@@ -267,39 +245,6 @@ function registerAdminToken_(body) {
 // Generic (title/body supplied by the caller) since Admin is pinged for
 // more than one kind of event — new request, approval, and potentially
 // more later.
-function sendAdminNotification_(title, body, link) {
-  try {
-    var tokens = getAdminTokens_();
-    if (!tokens.length) return;
-    var accessToken = getFcmAccessToken_();
-    if (!accessToken) return;
-
-    tokens.forEach(function(token) {
-      var message = {
-        message: {
-          token: token,
-          notification: { title: title, body: body },
-          webpush: { fcm_options: { link: link || 'https://diesel-form.vercel.app/index.html' } }
-        }
-      };
-      var res = UrlFetchApp.fetch('https://fcm.googleapis.com/v1/projects/' + FCM_PROJECT_ID + '/messages:send', {
-        method: 'post',
-        contentType: 'application/json',
-        headers: { Authorization: 'Bearer ' + accessToken },
-        payload: JSON.stringify(message),
-        muteHttpExceptions: true
-      });
-      var code = res.getResponseCode();
-      if (code !== 200) {
-        Logger.log('FCM send failed (' + code + '): ' + res.getContentText());
-        if (code === 404 || code === 400) removeAdminToken_(token);
-      }
-    });
-  } catch (err) {
-    Logger.log('sendAdminNotification_ error: ' + err.message);
-  }
-}
-
 // Source sheet for the vehicle list — tab "Calling Sheet", Column C.
 // NOTE: this used to be the "fleet s vehical" tab on a different spreadsheet
 // (below, still kept as PUMP_SHEET_ID since pumps still read from there) —
@@ -733,9 +678,14 @@ function createRequest_(body) {
     lock.releaseLock();
   }
   // Outside the lock — this is a network call (JWT sign + OAuth + FCM send),
-  // no need to hold the sheet lock for it.
-  sendManagerNotification_(id, body.vehicleNo, body.requestedBy);
-  sendAdminNotification_('🆕 New Diesel Request', (body.vehicleNo || 'Vehicle') + ' — requested by ' + (body.requestedBy || 'Calling Team') + ' (' + id + ')', 'https://diesel-form.vercel.app/index.html');
+  // no need to hold the sheet lock for it. Manager + Admin sent as ONE batch
+  // (see sendPushBatch_) instead of two sequential calls, so the caller's
+  // "Submitted!" response isn't waiting behind both.
+  var newReqBody = (body.vehicleNo || 'Vehicle') + ' — requested by ' + (body.requestedBy || 'Calling Team') + ' (' + id + ')';
+  sendPushBatch_([
+    { tokens: getManagerTokens_(), title: '🆕 New Diesel Request', body: newReqBody, link: 'https://diesel-form.vercel.app/manager-approval.html', onInvalid: removeManagerToken_ },
+    { tokens: getAdminTokens_(), title: '🆕 New Diesel Request', body: newReqBody, link: 'https://diesel-form.vercel.app/index.html', onInvalid: removeAdminToken_ }
+  ]);
   return { ok: true, requestId: id };
 }
 
@@ -946,9 +896,15 @@ function approveRequest_(body) {
   } finally {
     lock.releaseLock();
   }
-  // Outside the lock — network calls, no need to hold the sheet lock for them.
-  sendDieselNotification_(body.id, vehicleNo, approvedLiters);
-  sendAdminNotification_('✅ Request Approved', vehicleNo + ' — ' + approvedLiters + 'L approved by ' + (managerName || 'Manager') + ' (' + body.id + ')', 'https://diesel-form.vercel.app/index.html');
+  // Outside the lock — network calls, no need to hold the sheet lock for
+  // them. Diesel Team + Admin sent as ONE batch (see sendPushBatch_) instead
+  // of two sequential calls, so the Manager's "Approved!" response isn't
+  // waiting behind both.
+  var approvedBody = vehicleNo + ' — ' + approvedLiters + 'L approved (' + body.id + ')';
+  sendPushBatch_([
+    { tokens: getDieselTokens_(), title: '✅ Ready to Dispense', body: approvedBody, link: 'https://diesel-form.vercel.app/diesel-dispense.html', onInvalid: removeDieselToken_ },
+    { tokens: getAdminTokens_(), title: '✅ Request Approved', body: vehicleNo + ' — ' + approvedLiters + 'L approved by ' + (managerName || 'Manager') + ' (' + body.id + ')', link: 'https://diesel-form.vercel.app/index.html', onInvalid: removeAdminToken_ }
+  ]);
   return { ok: true, requestId: body.id };
 }
 

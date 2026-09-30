@@ -712,7 +712,20 @@
         if (vehicleInput.value.trim() !== vehicle) return; // stale response, ignore
         if (!res.ok || driverIdInput.value.trim()) return; // no match, or user typed one meanwhile
         driverIdInput.value = res.driverId;
-        driverIdInput.dispatchEvent(new Event('input'));
+        if (res.name) {
+          // This lookup already returns name/mobile (from the Attendance
+          // sheet) — filling them directly here instead of re-triggering
+          // driverIdInput's own fetchDriver() lookup skips an entire extra
+          // Apps Script round trip (~2-3s) in the common case.
+          fetchedDriver = { name: res.name, mobile: res.mobile || '' };
+          driverNameAuto.value = res.name;
+          contactNumber.value = res.mobile || '';
+          driverNameAuto.readOnly = true;
+          contactNumber.readOnly = !!res.mobile;
+          driverInfo.className = 'driver-info';
+        } else {
+          driverIdInput.dispatchEvent(new Event('input')); // fall back to the full Driver ID lookup
+        }
       })
       .catch(function(){ /* best-effort — caller can still enter Driver ID/name manually */ });
   }
