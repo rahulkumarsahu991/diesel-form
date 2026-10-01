@@ -520,8 +520,16 @@ function vehicleHistory_(vehicle, limit, fuelType) {
     .concat(readVehicleHistoryRows_(getOfficeSheet_(), target, fuelType))
     .concat(readCreditHistoryRows_(target, fuelType));
   // Row order != dispense order (an older request can still be dispensed later),
-  // so we sort by actual dispense time before taking the latest N.
-  rows.sort(function(a, b){ return new Date(b.dispensedAt) - new Date(a.dispensedAt); });
+  // so we sort by actual dispense time before taking the latest N. A row with a
+  // missing/corrupt dispensedAt (e.g. a manually-edited sheet cell) sorts to the
+  // bottom instead of NaN-comparing its way to the top.
+  rows.sort(function(a, b){
+    var ta = new Date(a.dispensedAt).getTime();
+    var tb = new Date(b.dispensedAt).getTime();
+    if (isNaN(ta)) ta = -Infinity;
+    if (isNaN(tb)) tb = -Infinity;
+    return tb - ta;
+  });
   return { ok: true, rows: rows.slice(0, max) };
 }
 
