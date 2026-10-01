@@ -598,14 +598,21 @@ function getRequest_(id) {
 // Routes to the correct sheet (Requests vs Office-Tanker) based on the ID's
 // prefix — returned `sheet` MUST be used for any write against this row,
 // never a fresh getSheet_(), or the write lands in the wrong tab entirely.
+// Two-pass lookup: scan only the ID column (1 col x N rows) to find the row,
+// then read just that one row's full width. As the sheet has grown past 1000+
+// rows, reading all HEADERS.length columns for every row just to find one by
+// ID (the old approach) got noticeably slower on every approve/reject/dispense/
+// delete/get call — this keeps the cost flat regardless of sheet size.
 function findRow_(id) {
   var sheet = sheetForId_(id);
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
-  var data = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
-  for (var i = 0; i < data.length; i++) {
-    if (String(data[i][COL.ID - 1]) === String(id)) {
-      return { rowIndex: i + 2, values: data[i], sheet: sheet };
+  var ids = sheet.getRange(2, COL.ID, lastRow - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(id)) {
+      var rowIndex = i + 2;
+      var values = sheet.getRange(rowIndex, 1, 1, HEADERS.length).getValues()[0];
+      return { rowIndex: rowIndex, values: values, sheet: sheet };
     }
   }
   return null;
