@@ -889,23 +889,28 @@ function approveRequest_(body) {
       return { ok: false, error: 'This request is already "' + found.values[COL.STATUS - 1] + '"' };
     }
     var sheet = found.sheet;
+    var values = found.values;
 
     // The Manager can edit and overwrite these (vehicle/driver/route/pump/liters)
-    if (body.vehicleNo) sheet.getRange(found.rowIndex, COL.VEHICLE).setValue(body.vehicleNo);
-    if (body.driverId) sheet.getRange(found.rowIndex, COL.DRIVER_ID).setValue(body.driverId);
-    if (body.driverName) sheet.getRange(found.rowIndex, COL.DRIVER).setValue(body.driverName);
-    if (body.routeTrip) sheet.getRange(found.rowIndex, COL.ROUTE).setValue(body.routeTrip);
-    if (body.pumpLocation) sheet.getRange(found.rowIndex, COL.PUMP).setValue(body.pumpLocation);
+    if (body.vehicleNo) values[COL.VEHICLE - 1] = body.vehicleNo;
+    if (body.driverId) values[COL.DRIVER_ID - 1] = body.driverId;
+    if (body.driverName) values[COL.DRIVER - 1] = body.driverName;
+    if (body.routeTrip) values[COL.ROUTE - 1] = body.routeTrip;
+    if (body.pumpLocation) values[COL.PUMP - 1] = body.pumpLocation;
 
-    sheet.getRange(found.rowIndex, COL.STATUS).setValue('Approved');
-    sheet.getRange(found.rowIndex, COL.MGR_NAME).setValue(body.managerName || '');
-    sheet.getRange(found.rowIndex, COL.APPROVED_LITERS).setValue(Number(body.approvedLiters) || 0);
-    sheet.getRange(found.rowIndex, COL.MGR_REMARKS).setValue(body.managerRemarks || '');
+    values[COL.STATUS - 1] = 'Approved';
+    values[COL.MGR_NAME - 1] = body.managerName || '';
+    values[COL.APPROVED_LITERS - 1] = Number(body.approvedLiters) || 0;
+    values[COL.MGR_REMARKS - 1] = body.managerRemarks || '';
     // Column P (OTP) is left blank on purpose — no longer auto-generated,
     // filled in manually if ever needed.
-    sheet.getRange(found.rowIndex, COL.APPROVED_AT).setValue(new Date());
+    values[COL.APPROVED_AT - 1] = new Date();
 
-    vehicleNo = body.vehicleNo || found.values[COL.VEHICLE - 1];
+    // One write for the whole row instead of up to 9 separate setValue calls —
+    // each Range.setValue() is its own round trip into the Sheets service.
+    sheet.getRange(found.rowIndex, 1, 1, HEADERS.length).setValues([values]);
+
+    vehicleNo = values[COL.VEHICLE - 1];
     approvedLiters = Number(body.approvedLiters) || 0;
     managerName = body.managerName || '';
   } finally {
@@ -936,10 +941,12 @@ function rejectRequest_(body) {
       return { ok: false, error: 'This request is already "' + found.values[COL.STATUS - 1] + '"' };
     }
     var sheet = found.sheet;
-    sheet.getRange(found.rowIndex, COL.STATUS).setValue('Rejected');
-    sheet.getRange(found.rowIndex, COL.MGR_NAME).setValue(body.managerName || '');
-    sheet.getRange(found.rowIndex, COL.MGR_REMARKS).setValue(body.managerRemarks || '');
-    sheet.getRange(found.rowIndex, COL.APPROVED_AT).setValue(new Date());
+    var values = found.values;
+    values[COL.STATUS - 1] = 'Rejected';
+    values[COL.MGR_NAME - 1] = body.managerName || '';
+    values[COL.MGR_REMARKS - 1] = body.managerRemarks || '';
+    values[COL.APPROVED_AT - 1] = new Date();
+    sheet.getRange(found.rowIndex, 1, 1, HEADERS.length).setValues([values]);
     return { ok: true };
   } finally {
     lock.releaseLock();
@@ -964,31 +971,42 @@ function dispenseRequest_(body) {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    var check = checkApproved_(body.id);
-    if (!check.ok) return check;
-
+    // Inlined status check (instead of calling checkApproved_, which does its
+    // own findRow_) plus reusing the already-updated in-memory row for the
+    // return value (instead of re-reading the sheet a third time) — this used
+    // to cost 3 findRow_ calls + 7 separate setValue calls per dispense.
     var found = findRow_(body.id);
+    if (!found) return { ok: false, error: 'Request ID not found' };
+    if (found.values[COL.STATUS - 1] === 'Dispensed') {
+      return { ok: false, error: 'This diesel has already been dispensed' };
+    }
+    if (found.values[COL.STATUS - 1] !== 'Approved') {
+      return { ok: false, error: 'This request is not "Approved" yet (status: ' + found.values[COL.STATUS - 1] + ')' };
+    }
+
     var sheet = found.sheet;
+    var values = found.values;
     var receiptNo = 'RCPT-' + Utilities.formatDate(new Date(), TIMEZONE, 'yyMMdd-HHmmss');
 
     // Actual liters = Approved Liters (manager-fixed quantity) — the diesel team
     // only enters rate/liter now, not the liters again. Amount is calculated on
     // the server (not trusting the client) to prevent tampering.
-    var actualLiters = Number(check.row.approvedLiters) || 0;
+    var actualLiters = Number(values[COL.APPROVED_LITERS - 1]) || 0;
     var ratePerLiter = Number(body.ratePerLiter) || 0;
     var amount = Math.round(ratePerLiter * actualLiters * 100) / 100;
 
-    sheet.getRange(found.rowIndex, COL.STATUS).setValue('Dispensed');
-    sheet.getRange(found.rowIndex, COL.DISP_BY).setValue(body.dispensedBy || '');
-    sheet.getRange(found.rowIndex, COL.ACTUAL_LITERS).setValue(actualLiters);
-    sheet.getRange(found.rowIndex, COL.DISP_AT).setValue(new Date());
-    sheet.getRange(found.rowIndex, COL.RECEIPT).setValue(receiptNo);
-    sheet.getRange(found.rowIndex, COL.RATE_PER_LITER).setValue(ratePerLiter);
-    sheet.getRange(found.rowIndex, COL.AMOUNT).setValue(amount);
-    if (body.pumpLocation) sheet.getRange(found.rowIndex, COL.PUMP).setValue(body.pumpLocation);
+    values[COL.STATUS - 1] = 'Dispensed';
+    values[COL.DISP_BY - 1] = body.dispensedBy || '';
+    values[COL.ACTUAL_LITERS - 1] = actualLiters;
+    values[COL.DISP_AT - 1] = new Date();
+    values[COL.RECEIPT - 1] = receiptNo;
+    values[COL.RATE_PER_LITER - 1] = ratePerLiter;
+    values[COL.AMOUNT - 1] = amount;
+    if (body.pumpLocation) values[COL.PUMP - 1] = body.pumpLocation;
 
-    var updated = findRow_(body.id);
-    var receipt = rowToObj_(updated.values);
+    sheet.getRange(found.rowIndex, 1, 1, HEADERS.length).setValues([values]);
+
+    var receipt = rowToObj_(values);
     return { ok: true, receipt: receipt };
   } finally {
     lock.releaseLock();
