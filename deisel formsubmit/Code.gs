@@ -431,7 +431,36 @@ function sheetForId_(id) {
   return getSheet_();
 }
 
+// A receipt number is "RCPT-yyMMdd-HHmmss" stamped in TIMEZONE at the exact
+// moment of dispense, so it can stand in for a "Dispensed At" cell that is
+// empty (the cell has been found blank on dozens of Dispensed rows while the
+// receipt stayed intact). Returns '' if it can't be parsed.
+function dispenseTimeFromReceipt_(receiptNo) {
+  var m = String(receiptNo || '').match(/^RCPT-(\d{2})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/);
+  if (!m) return '';
+  var istOffsetMs = 5.5 * 60 * 60 * 1000; // TIMEZONE is Asia/Kolkata (no DST)
+  return new Date(Date.UTC(2000 + Number(m[1]), Number(m[2]) - 1, Number(m[3]),
+    Number(m[4]), Number(m[5]), Number(m[6])) - istOffsetMs);
+}
+
+// Newest-first comparator that tolerates blank/invalid timestamps: a row with
+// no usable time counts as "newest" (so a fresh request can't sink out of
+// sight) and ties keep their incoming order — plain Date subtraction gave NaN
+// for these rows, which scrambles Array.sort.
+function newestFirstByCreated_(a, b) {
+  var ta = new Date(a.createdAt || a.approvedAt || a.dispensedAt).getTime();
+  var tb = new Date(b.createdAt || b.approvedAt || b.dispensedAt).getTime();
+  if (isNaN(ta)) ta = Infinity;
+  if (isNaN(tb)) tb = Infinity;
+  if (ta === tb) return 0;
+  return tb - ta;
+}
+
 function rowToObj_(row) {
+  var dispensedAt = row[COL.DISP_AT - 1];
+  if (!dispensedAt && row[COL.STATUS - 1] === 'Dispensed') {
+    dispensedAt = dispenseTimeFromReceipt_(row[COL.RECEIPT - 1]);
+  }
   return {
     id: row[COL.ID - 1],
     createdAt: row[COL.CREATED_AT - 1],
@@ -453,7 +482,7 @@ function rowToObj_(row) {
     approvedAt: row[COL.APPROVED_AT - 1],
     dispensedBy: row[COL.DISP_BY - 1],
     actualLiters: row[COL.ACTUAL_LITERS - 1],
-    dispensedAt: row[COL.DISP_AT - 1],
+    dispensedAt: dispensedAt,
     receiptNo: row[COL.RECEIPT - 1],
     ratePerLiter: row[COL.RATE_PER_LITER - 1],
     amount: row[COL.AMOUNT - 1],
@@ -486,7 +515,7 @@ function listRequests_(status, by, limit, source) {
   } else {
     rows = readRequestRows_(getSheet_(), status, by);
   }
-  rows.sort(function(a, b){ return new Date(b.createdAt) - new Date(a.createdAt); }); // newest first
+  rows.sort(newestFirstByCreated_);
   var max = Number(limit) || 0;
   if (max && rows.length > max) rows = rows.slice(0, max);
   return { ok: true, rows: rows };
@@ -578,7 +607,7 @@ function readVehicleHistoryRows_(sheet, target, fuelType) {
     if (String(r[COL.VEHICLE - 1] || '').trim().toUpperCase() !== target) continue;
     if (fuelType && String(r[COL.FUEL_TYPE - 1] || 'Diesel') !== fuelType) continue;
     rows.push({
-      dispensedAt: r[COL.DISP_AT - 1],
+      dispensedAt: r[COL.DISP_AT - 1] || dispenseTimeFromReceipt_(r[COL.RECEIPT - 1]),
       actualLiters: r[COL.ACTUAL_LITERS - 1],
       odometerKm: r[COL.ODOMETER - 1],
       driverName: r[COL.DRIVER - 1],
@@ -1452,4 +1481,30 @@ function deleteRequestRow_(body) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// One-time repair (run manually from the Apps Script editor): fills every empty
+// "Dispensed At" cell on Dispensed rows from the row's receipt number. Touches
+// only that one column and only cells that are currently blank.
+function backfillDispensedAt() {
+  var fixed = 0;
+  [getSheet_(), getOfficeSheet_()].forEach(function(sheet) {
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return;
+    var range = sheet.getRange(2, COL.DISP_AT, lastRow - 1, 1);
+    var disp = range.getValues();
+    var meta = sheet.getRange(2, COL.STATUS, lastRow - 1, COL.RECEIPT - COL.STATUS + 1).getValues();
+    var changed = false;
+    for (var i = 0; i < disp.length; i++) {
+      if (disp[i][0]) continue;
+      if (meta[i][0] !== 'Dispensed') continue;
+      var t = dispenseTimeFromReceipt_(meta[i][COL.RECEIPT - COL.STATUS]);
+      if (!t) continue;
+      disp[i][0] = t;
+      fixed++;
+      changed = true;
+    }
+    if (changed) range.setValues(disp);
+  });
+  Logger.log('Backfilled ' + fixed + ' Dispensed At cells');
 }
