@@ -1508,3 +1508,29 @@ function backfillDispensedAt() {
   });
   Logger.log('Backfilled ' + fixed + ' Dispensed At cells');
 }
+
+// One-time repair (run manually from the Apps Script editor): refills empty
+// "Created At" cells on the Requests sheet using the upload time of the row's
+// Caller Photo — the photo is uploaded in the same call that creates the row,
+// so Drive's file creation time is accurate to a few seconds. Only blank
+// Created At cells on rows that have a photo are written.
+function backfillCreatedAt() {
+  var sheet = getSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+  var created = sheet.getRange(2, COL.CREATED_AT, lastRow - 1, 1).getValues();
+  var photos = sheet.getRange(2, COL.CALLER_PHOTO, lastRow - 1, 1).getValues();
+  var fixed = 0, changed = false;
+  for (var i = 0; i < created.length; i++) {
+    if (created[i][0]) continue;
+    var m = String(photos[i][0] || '').match(/[?&]id=([^&]+)/);
+    if (!m) continue;
+    try {
+      created[i][0] = DriveApp.getFileById(m[1]).getDateCreated();
+      fixed++;
+      changed = true;
+    } catch (e) { /* file deleted or not accessible — leave blank */ }
+  }
+  if (changed) sheet.getRange(2, COL.CREATED_AT, lastRow - 1, 1).setValues(created);
+  Logger.log('Backfilled ' + fixed + ' Created At cells');
+}
