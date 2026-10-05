@@ -1234,5 +1234,10 @@
     }
   })();
 </script>
+<script>
+/* Number fields change only by typing — scroll-wheel / arrow keys must not nudge the value (an empty field jumped to 0, 1, 2...) */
+document.addEventListener("wheel", function(e){ var t = e.target; if (t && t.type === "number" && document.activeElement === t) t.blur(); }, { passive: true });
+document.addEventListener("keydown", function(e){ var t = e.target; if (t && t.type === "number" && (e.key === "ArrowUp" || e.key === "ArrowDown")) e.preventDefault(); });
+</script>
 </body>
 </html>
