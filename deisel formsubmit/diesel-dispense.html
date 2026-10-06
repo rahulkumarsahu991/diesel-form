@@ -90,6 +90,7 @@
     backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
   .list-toolbar button.active{background:var(--green);color:#fff;border-color:var(--green);}
   .list-toolbar .office-toggle{margin-left:auto;}
+  .list-toolbar .credit-filter.active{background:#7c3aed;color:#fff;border-color:#7c3aed;}
   .list-toolbar .office-toggle.active{background:#7c3aed;color:#fff;border-color:#7c3aed;}
 
   .date-filter{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--border);}
@@ -161,6 +162,7 @@
   .status-Approved{background:#dcfce7;color:var(--green);}
   .status-Rejected{background:#fee2e2;color:var(--red);}
   .status-Dispensed{background:#dbeafe;color:var(--blue);}
+  .status-Credit{background:#ede9fe;color:#7c3aed;}
   /* ---------- Login gate ---------- */
   #loginOverlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;
     background:
@@ -376,6 +378,7 @@
           <button class="list-filter" data-status="Pending">Pending</button>
           <button class="list-filter active" data-status="Approved">Approved</button>
           <button class="list-filter" data-status="">All</button>
+          <button class="list-filter credit-filter" data-status="credit">💳 Credit</button>
           <button class="office-toggle" id="officeOnlyBtn" type="button">🏭 Office/Tanker</button>
         </div>
 
@@ -817,9 +820,13 @@
              String(r.id || '').toUpperCase().indexOf(q) !== -1;
     });
     if (dateFromInput.value || dateToInput.value) rows = rows.filter(function(r){ return inDateFilter_(r.createdAt); });
-    rows = officeOnly
-      ? rows.filter(function(r){ return /^OT/i.test(r.id || ''); })
-      : rows.filter(function(r){ return !/^OT/i.test(r.id || ''); });
+    // The Credit tab already holds only Credit Diesel entries (all statuses),
+    // so the Office/Tanker split only applies to the other tabs.
+    if (listStatus !== 'credit') {
+      rows = officeOnly
+        ? rows.filter(function(r){ return /^OT/i.test(r.id || ''); })
+        : rows.filter(function(r){ return !/^OT/i.test(r.id || ''); });
+    }
     renderSummary(rows);
     renderApprovedList(rows);
   }
@@ -833,7 +840,7 @@
     var requestedStatus = listStatus;
     approvedList.innerHTML = '<div style="padding:10px;color:var(--muted);">Loading...</div>';
     summaryBar.innerHTML = '';
-    fetch(APPS_SCRIPT_URL + '?action=list&source=all&status=' + encodeURIComponent(requestedStatus))
+    fetch(APPS_SCRIPT_URL + (requestedStatus === 'credit' ? '?action=list&source=credit' : '?action=list&source=all&status=' + encodeURIComponent(requestedStatus)))
       .then(function(r){ return r.json(); })
       .then(function(res){
         if (token !== listRequestToken) return; // stale response, ignore
