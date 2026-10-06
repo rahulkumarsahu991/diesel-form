@@ -354,7 +354,7 @@
         <label>Requested Liters <span class="req">*</span></label>
         <input type="number" id="requestedLiters" required min="1" step="0.1" placeholder="e.g. 100">
         <label class="full-tank-check"><input type="checkbox" id="fullTankCheck"> ⛽ Full Tank (no specific quantity)</label>
-        <label class="full-tank-check credit-check"><input type="checkbox" id="creditDieselCheck"> 💳 Credit Diesel (goes straight to Admin, skips Manager &amp; Diesel Team)</label>
+        <label class="full-tank-check credit-check"><input type="checkbox" id="creditDieselCheck"> 💳 Credit Diesel (skips Manager — goes straight to Diesel Team)</label>
 
         <label>Route / Trip</label>
         <div class="autocomplete-wrap">
@@ -981,6 +981,10 @@
     }
 
     var isCreditDiesel = document.getElementById('creditDieselCheck').checked;
+    if (isCreditDiesel && String(document.getElementById('requestedLiters').value).trim().toLowerCase() === 'full') {
+      showMsg('err', '❌ Credit Diesel needs a specific quantity in liters — untick "Full Tank" and enter the liters.');
+      return;
+    }
     var payload = {
       action: isCreditDiesel ? 'createCredit' : 'create',
       vehicleNo: vehicleInput.value.trim(),
@@ -1012,7 +1016,7 @@
         localStorage.setItem('dieselCallerName', payload.requestedBy);
         myNameInput.value = payload.requestedBy;
         if (isCreditDiesel) {
-          showMsg('ok', '✅ Credit Diesel logged:<br><span class="req-id">' + res.requestId + '</span><div class="hint">This goes straight into the record — no Manager approval or Diesel Team step needed.</div>');
+          showMsg('ok', '✅ Credit Diesel submitted:<br><span class="req-id">' + res.requestId + '</span><div class="hint">No Manager approval needed — it goes straight to the Diesel Team.</div>');
         } else {
           showMsg('ok', '✅ Request submitted! Give this Request ID to the Manager:<br><span class="req-id">' + res.requestId + '</span><div class="hint">The Manager will approve it, after which it will show directly to the Diesel Team.</div>');
         }
@@ -1137,7 +1141,7 @@
         if (myMode !== (isAll ? 'all' : 'name')) return; // mode changed, ignore stale response
         if (!isAll && myNameInput.value.trim() !== name) return; // stale
         if (!res.ok) { myReqList.innerHTML = '<div style="padding:10px;color:var(--red);font-size:13px;">Error: ' + esc(res.error) + '</div>'; return; }
-        myAllRows = res.rows.concat(creditRes.ok ? creditRes.rows : []);
+        myAllRows = res.rows.concat(creditRes.ok ? creditRes.rows.map(function(r){ r.isCredit = true; return r; }) : []);
         renderMyStats();
         myStats.style.display = 'grid';
         myToolbar.style.display = 'flex';
@@ -1150,7 +1154,10 @@
 
   function renderMyStats(){
     var counts = { Pending: 0, Approved: 0, Rejected: 0, Dispensed: 0, Credit: 0 };
-    myAllRows.forEach(function(r){ counts[r.status] = (counts[r.status] || 0) + 1; });
+    myAllRows.forEach(function(r){
+      counts[r.status] = (counts[r.status] || 0) + 1;
+      if (r.isCredit && r.status !== 'Credit') counts.Credit++;
+    });
     var tiles = [
       { label: 'Total', num: myAllRows.length, accent: 'var(--navy)' },
       { label: 'Pending', num: counts.Pending, accent: '#d97706' },
@@ -1165,7 +1172,7 @@
   }
 
   function renderMyList(){
-    var rows = myStatus ? myAllRows.filter(function(r){ return r.status === myStatus; }) : myAllRows;
+    var rows = myStatus ? myAllRows.filter(function(r){ return myStatus === 'Credit' ? !!r.isCredit : r.status === myStatus; }) : myAllRows;
     if (!rows.length) { myReqList.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:13px;">No requests found.</div>'; return; }
     myReqList.innerHTML = '';
     rows.forEach(function(r){ myReqList.appendChild(renderMyCard(r)); });
@@ -1178,7 +1185,7 @@
     head.className = 'req-item-head';
     head.innerHTML =
       '<div>' +
-        '<div style="font-weight:800;color:var(--navy);font-size:13px;">' + esc(r.id) + (myMode === 'all' ? ' <span style="font-weight:600;color:var(--orange-dark);">— ' + esc(r.requestedBy) + '</span>' : '') + '</div>' +
+        '<div style="font-weight:800;color:var(--navy);font-size:13px;">' + esc(r.id) + (r.isCredit ? ' <span class="cr-tag">CR</span>' : '') + (myMode === 'all' ? ' <span style="font-weight:600;color:var(--orange-dark);">— ' + esc(r.requestedBy) + '</span>' : '') + '</div>' +
         '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + esc(r.vehicleNo) + ' • ' + esc(r.requestedLiters) + ' L • ' + fmtDate(r.createdAt) + '</div>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">' +

@@ -511,7 +511,12 @@ function listRequests_(status, by, limit, source) {
   } else if (source === 'credit') {
     rows = readRequestRows_(getCreditSheet_(), status, by);
   } else if (source === 'all') {
-    rows = readRequestRows_(getSheet_(), status, by).concat(readRequestRows_(getOfficeSheet_(), status, by));
+    // Credit Diesel now goes to the Diesel Team like any other request, so it
+    // is part of the merged view (still its own sheet, still has its own
+    // source='credit' view for the Admin's Credit Diesel window).
+    rows = readRequestRows_(getSheet_(), status, by)
+      .concat(readRequestRows_(getOfficeSheet_(), status, by))
+      .concat(readRequestRows_(getCreditSheet_(), status, by));
   } else {
     rows = readRequestRows_(getSheet_(), status, by);
   }
@@ -562,10 +567,10 @@ function vehicleHistory_(vehicle, limit, fuelType) {
   return { ok: true, rows: rows.slice(0, max) };
 }
 
-// Credit Diesel entries never go through a real dispense event, so there's
-// no dispensedAt — the date it was logged stands in for it, and each row is
-// tagged isCredit so the frontend can show a "CR" marker instead of implying
-// it was a normal approved-and-dispensed fill.
+// Credit Diesel history: rows made before the Diesel Team step existed carry
+// status "Credit" (the logged date stands in for a dispense time); newer ones
+// are dispensed like any other request and appear once status is "Dispensed".
+// Each row is tagged isCredit so the frontend shows a "CR" marker.
 function readCreditHistoryRows_(target, fuelType) {
   var sheet = getCreditSheet_();
   var lastRow = sheet.getLastRow();
@@ -575,16 +580,18 @@ function readCreditHistoryRows_(target, fuelType) {
   for (var i = 0; i < data.length; i++) {
     var r = data[i];
     if (!r[COL.ID - 1]) continue;
-    if (String(r[COL.STATUS - 1]) !== 'Credit') continue;
+    var st = String(r[COL.STATUS - 1]);
+    if (st !== 'Credit' && st !== 'Dispensed') continue;
     if (String(r[COL.VEHICLE - 1] || '').trim().toUpperCase() !== target) continue;
     if (fuelType && String(r[COL.FUEL_TYPE - 1] || 'Diesel') !== fuelType) continue;
+    var dispensed = st === 'Dispensed';
     rows.push({
-      dispensedAt: r[COL.CREATED_AT - 1],
-      actualLiters: r[COL.REQ_LITERS - 1],
+      dispensedAt: dispensed ? (r[COL.DISP_AT - 1] || dispenseTimeFromReceipt_(r[COL.RECEIPT - 1])) : r[COL.CREATED_AT - 1],
+      actualLiters: dispensed ? r[COL.ACTUAL_LITERS - 1] : r[COL.REQ_LITERS - 1],
       odometerKm: r[COL.ODOMETER - 1],
       driverName: r[COL.DRIVER - 1],
-      ratePerLiter: '',
-      amount: '',
+      ratePerLiter: dispensed ? r[COL.RATE_PER_LITER - 1] : '',
+      amount: dispensed ? r[COL.AMOUNT - 1] : '',
       isCredit: true
     });
   }
@@ -751,14 +758,17 @@ function nextCreditRequestSeq_(sheet) {
   return maxSeq + 1;
 }
 
-// Calling form's "Credit Diesel" checkbox — diesel already given out on
-// credit somewhere else, being logged here purely for the record. Written
-// straight into its own "Credit Diesel" tab with status "Credit" — it never
-// enters the Manager/Diesel Team workflow at all (different sheet, and not
-// part of source='all' either), only the Admin/Director dashboard reads it.
+// Calling form's "Credit Diesel" checkbox — a credit-diesel fill that skips the
+// Manager: it lands on its own "Credit Diesel" tab (CR### IDs) already
+// "Approved", so the Diesel Team dispenses it like any other request.
 function createCreditRequest_(body) {
   var early = dupRequestId_(body);
   if (early) return { ok: true, requestId: early, duplicate: true };
+  // No Manager step to set a quantity, and the Diesel Team only enters the rate
+  // (liters come from the approved quantity), so "Full" has no number to use.
+  if (String(body.requestedLiters || '').trim().toLowerCase() === 'full') {
+    return { ok: false, error: 'Credit Diesel needs a specific quantity in liters - Full Tank is not available for credit.' };
+  }
   var callerPhotoUrl = '';
   if (body.callerPhoto) {
     var safeVehicle = String(body.vehicleNo || 'vehicle').replace(/[^A-Za-z0-9_-]/g, '');
@@ -787,12 +797,19 @@ function createCreditRequest_(body) {
     row[COL.ROUTE - 1] = body.routeTrip || '';
     row[COL.CURRENT_LOCATION - 1] = body.currentLocation || '';
     row[COL.ODOMETER - 1] = Number(body.odometerKm) || 0;
-    row[COL.REQ_LITERS - 1] = (String(body.requestedLiters || '').trim().toLowerCase() === 'full')
-      ? 'Full' : (Number(body.requestedLiters) || 0);
+    var liters = Number(body.requestedLiters) || 0;
+    row[COL.REQ_LITERS - 1] = liters;
     row[COL.REQ_BY - 1] = body.requestedBy || '';
     row[COL.CONTACT - 1] = body.contactNumber || '';
     row[COL.CALL_REMARKS - 1] = body.callingRemarks || '';
-    row[COL.STATUS - 1] = 'Credit';
+    // Skips the Manager like Office/Tanker does: written straight in as
+    // "Approved" (Approved Liters = requested) so it is in the Diesel Team's
+    // ready-to-dispense list right away. It stays on the Credit Diesel sheet
+    // (CR### IDs) so Admin can still see all credit entries together.
+    row[COL.STATUS - 1] = 'Approved';
+    row[COL.MGR_NAME - 1] = 'Credit Diesel (direct)';
+    row[COL.APPROVED_LITERS - 1] = liters;
+    row[COL.APPROVED_AT - 1] = now;
     row[COL.FUEL_TYPE - 1] = 'Diesel';
     row[COL.CALLER_PHOTO - 1] = callerPhotoUrl;
 
@@ -808,6 +825,11 @@ function createCreditRequest_(body) {
   } finally {
     lock.releaseLock();
   }
+  var creditBody = (body.vehicleNo || 'Vehicle') + ' — ' + (Number(body.requestedLiters) || 0) + 'L credit diesel by ' + (body.requestedBy || 'Calling Team') + ' (' + id + ')';
+  sendPushBatch_([
+    { tokens: getDieselTokens_(), title: '💳 Credit Diesel — Ready to Dispense', body: creditBody, link: 'https://diesel-form.vercel.app/diesel-dispense.html', onInvalid: removeDieselToken_ },
+    { tokens: getAdminTokens_(), title: '💳 New Credit Diesel', body: creditBody, link: 'https://diesel-form.vercel.app/index.html', onInvalid: removeAdminToken_ }
+  ]);
   return { ok: true, requestId: id };
 }
 

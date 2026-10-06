@@ -366,16 +366,16 @@
   <div id="creditOverlay" class="credit-overlay">
     <div class="credit-modal">
       <div class="credit-modal-head">
-        <span>💳 Credit Diesel — logged directly by Calling Team, skips Manager &amp; Diesel Team</span>
+        <span>💳 Credit Diesel — submitted by Calling Team, skips Manager, goes straight to Diesel Team</span>
         <button type="button" id="creditCloseBtn" title="Close">✕</button>
       </div>
       <div class="credit-modal-body">
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Request ID</th><th>Date</th><th>Vehicle</th><th>Odometer (KM)</th><th>Driver</th><th>Liters</th><th>Requested By</th><th>Remarks</th><th></th></tr>
+              <tr><th>Request ID</th><th>Date</th><th>Vehicle</th><th>Odometer (KM)</th><th>Driver</th><th>Liters</th><th>Requested By</th><th>Status</th><th>Remarks</th><th></th></tr>
             </thead>
-            <tbody id="creditBody"><tr><td colspan="9" class="ov-loading">Loading...</td></tr></tbody>
+            <tbody id="creditBody"><tr><td colspan="10" class="ov-loading">Loading...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -606,8 +606,8 @@
     fetch(APPS_SCRIPT_URL + '?action=list&source=credit&limit=300')
       .then(function(r){ return r.json(); })
       .then(function(res){
-        if (!res.ok) { creditBody.innerHTML = '<tr><td colspan="9" class="ov-empty">Error: ' + esc(res.error) + '</td></tr>'; return; }
-        if (!res.rows.length) { creditBody.innerHTML = '<tr><td colspan="9" class="ov-empty">No credit diesel entries yet.</td></tr>'; return; }
+        if (!res.ok) { creditBody.innerHTML = '<tr><td colspan="10" class="ov-empty">Error: ' + esc(res.error) + '</td></tr>'; return; }
+        if (!res.rows.length) { creditBody.innerHTML = '<tr><td colspan="10" class="ov-empty">No credit diesel entries yet.</td></tr>'; return; }
         creditBody.innerHTML = res.rows.map(function(r){
           return '<tr>' +
             '<td data-label="Request ID" class="vsum"><b>' + esc(r.id) + '</b></td>' +
@@ -617,13 +617,14 @@
             '<td data-label="Driver">' + esc(r.driverName || '-') + '</td>' +
             '<td data-label="Liters">' + esc(r.requestedLiters) + '</td>' +
             '<td data-label="Requested By">' + esc(r.requestedBy) + '</td>' +
+            '<td data-label="Status"><span class="status-chip status-' + esc(r.status) + '">' + esc(r.status) + '</span></td>' +
             '<td data-label="Remarks">' + esc(r.callingRemarks || '-') + '</td>' +
             '<td class="del-cell"><button type="button" class="row-del-btn" data-id="' + esc(r.id) + '" title="Delete this entry">✕</button></td>' +
           '</tr>';
         }).join('');
       })
       .catch(function(err){
-        creditBody.innerHTML = '<tr><td colspan="9" class="ov-empty">Network error: ' + esc(err.message) + '</td></tr>';
+        creditBody.innerHTML = '<tr><td colspan="10" class="ov-empty">Network error: ' + esc(err.message) + '</td></tr>';
       });
   }
   creditBody.addEventListener('click', function(e){
