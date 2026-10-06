@@ -413,8 +413,8 @@
     </div>
   </div>
 
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
 <script>
   /* ---------- Login gate ---------- */
   (function(){
@@ -462,7 +462,7 @@
   /* ---------- Push notifications: ping this device when Manager approves ----------
      Same setup as manager-approval.html — one-time permission prompt, then
      registers this device's FCM token so approveRequest_ can push to it. */
-  (function(){
+  window.addEventListener("load", function(){
     var firebaseConfig = {
       apiKey: "AIzaSyAjgDscAwmwnyURrW52QFQb1NDBYcNqAzk",
       authDomain: "diesel-approval-notifications.firebaseapp.com",
@@ -511,7 +511,7 @@
         }
       });
     }).catch(function(err){ console.log('Service worker registration failed:', err); });
-  })();
+  });
 
   var verifiedRow = null;
 

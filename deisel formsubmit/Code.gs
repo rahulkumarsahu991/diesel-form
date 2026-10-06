@@ -665,6 +665,8 @@ function nextRequestSeq_(sheet) {
 }
 
 function createRequest_(body) {
+  var early = dupRequestId_(body);
+  if (early) return { ok: true, requestId: early, duplicate: true };
   // Optional photo from the Calling form. Uploaded BEFORE taking the lock —
   // the Drive upload takes a couple of seconds and callers submit all day, so
   // holding the sheet lock for it would queue everyone else behind each
@@ -680,6 +682,8 @@ function createRequest_(body) {
   lock.waitLock(20000);
   var id;
   try {
+    var dup = dupRequestId_(body);
+    if (dup) return { ok: true, requestId: dup, duplicate: true };
     var sheet = getSheet_();
     var nextRow = sheet.getLastRow() + 1;
     var seq = nextRequestSeq_(sheet);
@@ -718,6 +722,7 @@ function createRequest_(body) {
 
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush(); // make sure this write is visible before the lock releases
+    rememberClientId_(body, id);
   } finally {
     lock.releaseLock();
   }
@@ -752,6 +757,8 @@ function nextCreditRequestSeq_(sheet) {
 // enters the Manager/Diesel Team workflow at all (different sheet, and not
 // part of source='all' either), only the Admin/Director dashboard reads it.
 function createCreditRequest_(body) {
+  var early = dupRequestId_(body);
+  if (early) return { ok: true, requestId: early, duplicate: true };
   var callerPhotoUrl = '';
   if (body.callerPhoto) {
     var safeVehicle = String(body.vehicleNo || 'vehicle').replace(/[^A-Za-z0-9_-]/g, '');
@@ -763,6 +770,8 @@ function createCreditRequest_(body) {
   lock.waitLock(20000);
   var id;
   try {
+    var dup = dupRequestId_(body);
+    if (dup) return { ok: true, requestId: dup, duplicate: true };
     var sheet = getCreditSheet_();
     var nextRow = sheet.getLastRow() + 1;
     var seq = nextCreditRequestSeq_(sheet);
@@ -795,6 +804,7 @@ function createCreditRequest_(body) {
 
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush();
+    rememberClientId_(body, id);
   } finally {
     lock.releaseLock();
   }
@@ -857,17 +867,28 @@ function uploadPhotoFromDataUrl_(dataUrl, filename) {
 // "Approved" (Approved Liters = the liters filled) so it shows up right away
 // in the Diesel Team's ready-to-dispense list.
 function createOfficeRequest_(body) {
+  var early = dupRequestId_(body);
+  if (early) return { ok: true, requestId: early, duplicate: true };
+
+  // Drive uploads take seconds each — done BEFORE taking the sheet lock (named
+  // by vehicle + time since the request ID isn't known yet) so other people's
+  // submits don't queue behind this request's two photos.
+  var safeVehicle = String(body.vehicleNo || 'vehicle').replace(/[^A-Za-z0-9_-]/g, '');
+  var stamp = Utilities.formatDate(new Date(), TIMEZONE, 'yyyyMMdd-HHmmss');
+  var beforePhotoUrl = uploadPhotoFromDataUrl_(body.beforePhoto, 'office_' + safeVehicle + '_' + stamp + '_before');
+  var afterPhotoUrl = uploadPhotoFromDataUrl_(body.afterPhoto, 'office_' + safeVehicle + '_' + stamp + '_after');
+
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
+    var dup = dupRequestId_(body);
+    if (dup) return { ok: true, requestId: dup, duplicate: true };
     var sheet = getOfficeSheet_();
     var nextRow = sheet.getLastRow() + 1;
     var seq = nextOfficeRequestSeq_(sheet);
     var id = 'OT' + pad_(seq, 3);
     var now = new Date();
     var liters = Number(body.requestedLiters) || 0;
-    var beforePhotoUrl = uploadPhotoFromDataUrl_(body.beforePhoto, id + '_before');
-    var afterPhotoUrl = uploadPhotoFromDataUrl_(body.afterPhoto, id + '_after');
 
     var row = [];
     row[COL.ID - 1] = id;
@@ -898,6 +919,7 @@ function createOfficeRequest_(body) {
     sheet.getRange(nextRow, COL.BEFORE_PHOTO, 1, 2).setNumberFormat('@');
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush();
+    rememberClientId_(body, id);
     return { ok: true, requestId: id };
   } finally {
     lock.releaseLock();
@@ -1264,6 +1286,19 @@ function pad_(n, width) {
   var s = String(n);
   while (s.length < width) s = '0' + s;
   return s;
+}
+
+// Idempotency for create calls: a form on a weak network may re-send a submit
+// whose first attempt actually reached the server but whose reply was lost.
+// Each submit carries a clientId; the ID it produced is remembered for 6h so a
+// re-send returns the same request instead of creating a duplicate row.
+function dupRequestId_(body) {
+  if (!body || !body.clientId) return '';
+  return CacheService.getScriptCache().get('cid_' + String(body.clientId).slice(0, 64)) || '';
+}
+function rememberClientId_(body, id) {
+  if (!body || !body.clientId) return;
+  try { CacheService.getScriptCache().put('cid_' + String(body.clientId).slice(0, 64), id, 21600); } catch (e) {}
 }
 
 function fillEmpty_(row) {

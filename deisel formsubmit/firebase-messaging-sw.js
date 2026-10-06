@@ -1,6 +1,7 @@
 // Must live at the site root (not in a subfolder) so its scope covers the
 // whole origin — this is what lets a push notification arrive even when
 // manager-approval.html itself isn't open in any tab.
+importScripts('/sw-cache.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 

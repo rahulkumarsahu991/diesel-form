@@ -361,8 +361,8 @@
     </div>
   </div>
 
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
 <script>
   /* ---------- Login gate ---------- */
   (function(){
@@ -413,7 +413,7 @@
      still arrive even if this tab (or the whole browser) is closed, as long
      as the OS/browser's push service is running — that's the point of using
      a service worker instead of just polling while the page is open. */
-  (function(){
+  window.addEventListener("load", function(){
     var firebaseConfig = {
       apiKey: "AIzaSyAjgDscAwmwnyURrW52QFQb1NDBYcNqAzk",
       authDomain: "diesel-approval-notifications.firebaseapp.com",
@@ -465,7 +465,7 @@
         }
       });
     }).catch(function(err){ console.log('Service worker registration failed:', err); });
-  })();
+  });
 
   var listEl = document.getElementById('list');
   var summaryBar = document.getElementById('summaryBar');
