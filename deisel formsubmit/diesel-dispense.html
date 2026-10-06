@@ -342,6 +342,11 @@
     <div class="card no-print" id="dispenseCard" style="display:none;">
       <div class="details" id="detailsBox"></div>
 
+      <div id="litersWrap" style="display:none;">
+        <label>Liters Dispensed <span style="color:var(--red)">*</span></label>
+        <input type="number" id="actualLiters" min="0.1" step="any" inputmode="decimal" placeholder="e.g. 100">
+      </div>
+
       <label>Diesel Pump / Location <span style="color:var(--red)">*</span></label>
       <div class="autocomplete-wrap">
         <input type="text" id="pumpLocation" autocomplete="off" placeholder="Type to search...">
@@ -612,20 +617,31 @@
       detailRow('Route / Trip', row.routeTrip || '-') +
       detailRow('Current Location', row.currentLocation || '-') +
       detailRow('Odometer (KM)', row.odometerKm || '-') +
-      detailRow('Approved Liters', row.approvedLiters) +
+      detailRow(isCreditRow_(row) ? 'Requested Liters' : 'Approved Liters', row.approvedLiters) +
       (row.callerPhoto
         ? '<div class="row no-print"><span>Caller Photo</span><span><a href="' + esc(row.callerPhoto) + '" target="_blank" rel="noopener">' +
           '<img src="' + esc(row.callerPhoto) + '" alt="Caller photo" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid #d1d5db;display:block;"></a></span></div>'
         : '');
     document.getElementById('ratePerLiter').value = '';
     document.getElementById('amount').value = '';
+    // Credit Diesel skips the Manager, so nobody has fixed the quantity yet —
+    // the Diesel Team enters the liters (pre-filled with what was requested).
+    var litersInput = document.getElementById('actualLiters');
+    var isCredit = isCreditRow_(row);
+    document.getElementById('litersWrap').style.display = isCredit ? 'block' : 'none';
+    litersInput.value = isCredit && Number(row.approvedLiters) > 0 ? row.approvedLiters : '';
     document.getElementById('dispenseCard').style.display = 'block';
   }
 
+  function isCreditRow_(row){ return !!row && /^CR/i.test(String(row.id || '')); }
+
   document.getElementById('ratePerLiter').addEventListener('input', updateAmount);
+  document.getElementById('actualLiters').addEventListener('input', updateAmount);
   function updateAmount(){
     var rate = Number(document.getElementById('ratePerLiter').value) || 0;
-    var liters = verifiedRow ? Number(verifiedRow.approvedLiters) || 0 : 0;
+    var liters = !verifiedRow ? 0
+      : (isCreditRow_(verifiedRow) ? Number(document.getElementById('actualLiters').value) || 0
+                                   : Number(verifiedRow.approvedLiters) || 0);
     var amountEl = document.getElementById('amount');
     amountEl.value = rate && liters ? '₹ ' + (rate * liters).toFixed(2) : '';
   }
@@ -636,6 +652,9 @@
     var pumpLocation = pumpInput.value.trim();
     var ratePerLiter = document.getElementById('ratePerLiter').value;
     var dispensedBy = document.getElementById('dispensedBy').value.trim();
+    var creditRow = isCreditRow_(verifiedRow);
+    var actualLiters = document.getElementById('actualLiters').value;
+    if (creditRow && !(Number(actualLiters) > 0)) { showErr(msg, 'Enter the Liters dispensed.'); return; }
     if (!pumpLocation) { showErr(msg, 'Enter the Diesel Pump / Location.'); return; }
     if (!ratePerLiter || !dispensedBy) { showErr(msg, 'Enter both Rate per Liter and your name.'); return; }
 
@@ -647,7 +666,7 @@
     fetch(APPS_SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'dispense', id: id, pumpLocation: pumpLocation, ratePerLiter: ratePerLiter, dispensedBy: dispensedBy })
+      body: JSON.stringify({ action: 'dispense', id: id, pumpLocation: pumpLocation, ratePerLiter: ratePerLiter, dispensedBy: dispensedBy, actualLiters: creditRow ? actualLiters : undefined })
     }).then(function(r){ return r.json(); })
     .then(function(res){
       if (!res.ok) { showErr(msg, '❌ ' + res.error); return; }

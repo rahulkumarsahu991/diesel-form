@@ -764,11 +764,6 @@ function nextCreditRequestSeq_(sheet) {
 function createCreditRequest_(body) {
   var early = dupRequestId_(body);
   if (early) return { ok: true, requestId: early, duplicate: true };
-  // No Manager step to set a quantity, and the Diesel Team only enters the rate
-  // (liters come from the approved quantity), so "Full" has no number to use.
-  if (String(body.requestedLiters || '').trim().toLowerCase() === 'full') {
-    return { ok: false, error: 'Credit Diesel needs a specific quantity in liters - Full Tank is not available for credit.' };
-  }
   var callerPhotoUrl = '';
   if (body.callerPhoto) {
     var safeVehicle = String(body.vehicleNo || 'vehicle').replace(/[^A-Za-z0-9_-]/g, '');
@@ -797,7 +792,10 @@ function createCreditRequest_(body) {
     row[COL.ROUTE - 1] = body.routeTrip || '';
     row[COL.CURRENT_LOCATION - 1] = body.currentLocation || '';
     row[COL.ODOMETER - 1] = Number(body.odometerKm) || 0;
-    var liters = Number(body.requestedLiters) || 0;
+    // "Full" stays as text — there is no Manager to fix a quantity, so the
+    // Diesel Team enters the real liters when dispensing (see dispenseRequest_).
+    var liters = (String(body.requestedLiters || '').trim().toLowerCase() === 'full')
+      ? 'Full' : (Number(body.requestedLiters) || 0);
     row[COL.REQ_LITERS - 1] = liters;
     row[COL.REQ_BY - 1] = body.requestedBy || '';
     row[COL.CONTACT - 1] = body.contactNumber || '';
@@ -825,7 +823,7 @@ function createCreditRequest_(body) {
   } finally {
     lock.releaseLock();
   }
-  var creditBody = (body.vehicleNo || 'Vehicle') + ' — ' + (Number(body.requestedLiters) || 0) + 'L credit diesel by ' + (body.requestedBy || 'Calling Team') + ' (' + id + ')';
+  var creditBody = (body.vehicleNo || 'Vehicle') + ' — ' + (String(body.requestedLiters || '').trim().toLowerCase() === 'full' ? 'Full tank' : (Number(body.requestedLiters) || 0) + 'L') + ' credit diesel by ' + (body.requestedBy || 'Calling Team') + ' (' + id + ')';
   sendPushBatch_([
     { tokens: getDieselTokens_(), title: '💳 Credit Diesel — Ready to Dispense', body: creditBody, link: 'https://diesel-form.vercel.app/diesel-dispense.html', onInvalid: removeDieselToken_ },
     { tokens: getAdminTokens_(), title: '💳 New Credit Diesel', body: creditBody, link: 'https://diesel-form.vercel.app/index.html', onInvalid: removeAdminToken_ }
@@ -1065,6 +1063,13 @@ function dispenseRequest_(body) {
     // only enters rate/liter now, not the liters again. Amount is calculated on
     // the server (not trusting the client) to prevent tampering.
     var actualLiters = Number(values[COL.APPROVED_LITERS - 1]) || 0;
+    // Credit Diesel has no Manager to fix the quantity, so the Diesel Team
+    // enters the liters actually filled (other requests ignore body.actualLiters).
+    if (/^CR/i.test(String(body.id || ''))) {
+      actualLiters = Number(body.actualLiters) || 0;
+      if (actualLiters <= 0) return { ok: false, error: 'Enter the Liters dispensed for this Credit Diesel entry.' };
+      values[COL.APPROVED_LITERS - 1] = actualLiters;
+    }
     var ratePerLiter = Number(body.ratePerLiter) || 0;
     var amount = Math.round(ratePerLiter * actualLiters * 100) / 100;
 

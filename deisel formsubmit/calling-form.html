@@ -981,10 +981,6 @@
     }
 
     var isCreditDiesel = document.getElementById('creditDieselCheck').checked;
-    if (isCreditDiesel && String(document.getElementById('requestedLiters').value).trim().toLowerCase() === 'full') {
-      showMsg('err', '❌ Credit Diesel needs a specific quantity in liters — untick "Full Tank" and enter the liters.');
-      return;
-    }
     var payload = {
       action: isCreditDiesel ? 'createCredit' : 'create',
       vehicleNo: vehicleInput.value.trim(),
