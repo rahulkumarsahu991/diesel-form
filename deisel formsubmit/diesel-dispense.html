@@ -844,7 +844,7 @@
     if (listStatus !== 'credit') {
       rows = officeOnly
         ? rows.filter(function(r){ return /^OT/i.test(r.id || ''); })
-        : rows.filter(function(r){ return !/^OT/i.test(r.id || ''); });
+        : rows.filter(function(r){ return !/^(OT|CR)/i.test(r.id || ''); }); // Credit entries show only under the Credit button
     }
     renderSummary(rows);
     renderApprovedList(rows);
