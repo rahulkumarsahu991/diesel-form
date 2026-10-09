@@ -601,6 +601,9 @@
           ? '<div class="full"><label>Caller Photo <span style="font-weight:400;">(tap to open full size)</span></label>' +
             '<a href="' + esc(row.callerPhoto) + '" target="_blank" rel="noopener"><img class="cp-img" src="' + esc(row.callerPhoto) + '" alt="Caller photo"></a></div>'
           : '') +
+        (row.callingRemarks
+          ? '<div class="full"><label>Caller Remarks</label><div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:9px 11px;font-size:13px;white-space:pre-wrap;word-break:break-word;">' + esc(row.callingRemarks) + '</div></div>'
+          : '') +
         '<div class="full">' + fieldTextarea('Manager Remarks', 'managerRemarks', row.managerRemarks) + '</div>' +
       '</div>';
     card.appendChild(body);

@@ -618,6 +618,8 @@
       detailRow('Current Location', row.currentLocation || '-') +
       detailRow('Odometer (KM)', row.odometerKm || '-') +
       detailRow(isCreditRow_(row) ? 'Requested Liters' : 'Approved Liters', row.approvedLiters) +
+      (row.callingRemarks ? detailRow('Caller Remarks', row.callingRemarks) : '') +
+      (row.managerRemarks ? detailRow('Manager Remarks', row.managerRemarks) : '') +
       (row.callerPhoto
         ? '<div class="row no-print"><span>Caller Photo</span><span><a href="' + esc(row.callerPhoto) + '" target="_blank" rel="noopener">' +
           '<img src="' + esc(row.callerPhoto) + '" alt="Caller photo" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid #d1d5db;display:block;"></a></span></div>'
@@ -936,6 +938,8 @@
       row('Requested Liters', r.requestedLiters) +
       row('Approved Liters', r.approvedLiters || '-') +
       row('Manager', r.managerName || '-') +
+      row('Caller Remarks', r.callingRemarks || '-') +
+      row('Manager Remarks', r.managerRemarks || '-') +
       row('Pump / Location', r.pumpLocation || '-') +
       row('Actual Liters', r.actualLiters || '-') +
       row('Rate per Liter', r.ratePerLiter ? '₹ ' + r.ratePerLiter : '-') +
