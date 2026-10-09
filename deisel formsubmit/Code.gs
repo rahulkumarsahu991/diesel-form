@@ -275,10 +275,12 @@ var ROUTE_TO_COL = 4;   // Column D
 // Attendance sheet: Vehicle No -> today's on-duty Driver ID/Name/Mobile.
 // Layout: Col A=Sl No, B=Driver ID, C=Driver Name, D=Mobile, then a pair of
 // columns per day of the month starting at E (Vehicle No that day, then
-// TRUE/FALSE present). NOTE: tab name is month-specific ("Attendance Sep") —
-// update ATTENDANCE_SHEET_NAME each month, or this lookup silently finds nothing.
+// TRUE/FALSE present). The tab is month-specific ("Attendance Oct", "Attendance Nov", ...)
+// and is picked automatically from today's month by attendanceSheetName_().
 var ATTENDANCE_SHEET_ID = '1wgG2K9phHMQPvIskvXF1OBHxNHFk8pegrKCi0hvuF6U';
-var ATTENDANCE_SHEET_NAME = 'Attendance Sep';
+function attendanceSheetName_() {
+  return 'Attendance ' + Utilities.formatDate(new Date(), TIMEZONE, 'MMM');
+}
 var ATTENDANCE_ID_COL = 2;     // Column B
 var ATTENDANCE_NAME_COL = 3;   // Column C
 var ATTENDANCE_MOBILE_COL = 4; // Column D
@@ -1213,7 +1215,7 @@ function lookupDriver_(id) {
 
 function lookupDriverInAttendance_(targetLower) {
   var ss = SpreadsheetApp.openById(ATTENDANCE_SHEET_ID);
-  var sheet = findSheetLoose_(ss, ATTENDANCE_SHEET_NAME);
+  var sheet = findSheetLoose_(ss, attendanceSheetName_());
   if (!sheet) return null;
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
@@ -1243,7 +1245,7 @@ function lookupDriverByVehicleToday_(vehicle) {
 
   var cache = CacheService.getScriptCache();
   var todayKey = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
-  var cacheKey = 'attmap_' + todayKey;
+  var cacheKey = 'attmap2_' + todayKey;
   var map;
   var cached = cache.get(cacheKey);
   if (cached) {
@@ -1261,7 +1263,7 @@ function lookupDriverByVehicleToday_(vehicle) {
 function buildTodayAttendanceMap_() {
   var map = {};
   var ss = SpreadsheetApp.openById(ATTENDANCE_SHEET_ID);
-  var sheet = findSheetLoose_(ss, ATTENDANCE_SHEET_NAME);
+  var sheet = findSheetLoose_(ss, attendanceSheetName_());
   if (!sheet) return map;
 
   var lastCol = sheet.getLastColumn();
