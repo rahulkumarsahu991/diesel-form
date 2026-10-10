@@ -983,8 +983,8 @@
   flushOutbox_();
 
   /* ---------- Back Date mode: record a fill from an earlier date ----------
-     Picking a date switches the submit to the "Back Date" record (BACKD###,
-     its own sheet, Created At = the picked date); it skips Manager/Diesel Team. */
+     Picking a date switches the submit to a "Back Date" request (BACKD###,
+     Created At = the picked date); it follows the normal Manager -> Diesel Team flow. */
   var backDateInput = document.getElementById('backDateInput');
   var backDateBtn = document.getElementById('backDateBtn');
   var backDateBanner = document.getElementById('backDateBanner');
@@ -1002,10 +1002,10 @@
     if (!v) { clearBackDate_(); return; }
     var p = v.split('-');
     var label = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    backDateText.textContent = '📅 Back Date: ' + label + ' — this entry will be saved with that date (no Manager / Diesel Team step)';
+    backDateText.textContent = '📅 Back Date: ' + label + ' — this request goes to the Manager and is saved with that date';
     backDateBanner.style.display = 'flex';
     backDateBtn.classList.add('active');
-    submitBtn.textContent = 'Submit Back Date Entry';
+    submitBtn.textContent = 'Submit Back Date Request';
     creditCheckEl.checked = false;
     creditCheckEl.closest('label').classList.remove('active');
     creditCheckEl.disabled = true;
@@ -1073,7 +1073,7 @@
         localStorage.setItem('dieselCallerName', payload.requestedBy);
         myNameInput.value = payload.requestedBy;
         if (backDateVal) {
-          showMsg('ok', '✅ Back Date entry saved:<br><span class="req-id">' + res.requestId + '</span><div class="hint">Saved with the date you picked — it is a record only, no Manager / Diesel Team step.</div>');
+          showMsg('ok', '✅ Back Date request submitted — give this Request ID to the Manager:<br><span class="req-id">' + res.requestId + '</span><div class="hint">Saved with the date you picked. The Manager will approve it, after which it shows to the Diesel Team.</div>');
         } else if (isCreditDiesel) {
           showMsg('ok', '✅ Credit Diesel submitted:<br><span class="req-id">' + res.requestId + '</span><div class="hint">No Manager approval needed — it goes straight to the Diesel Team.</div>');
         } else {

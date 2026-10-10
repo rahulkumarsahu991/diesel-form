@@ -37,7 +37,6 @@
 var SHEET_NAME = 'Requests';
 var OFFICE_SHEET_NAME = 'Office-Tanker'; // Office Pump/Tanker Distribution Form — separate tab, IDs prefixed "OT"
 var CREDIT_SHEET_NAME = 'Credit Diesel'; // Calling form's "Credit Diesel" checkbox — separate tab, IDs prefixed "CR"
-var BACKDATE_SHEET_NAME = 'Back Date'; // Calling form's "Back Date" mode - record-only entries, IDs prefixed "BACKD"
 var TIMEZONE = 'Asia/Kolkata';
 
 // Gate for the "Clear All Data" button on index.html (Director/Developer view only).
@@ -427,23 +426,10 @@ function getCreditSheet_() {
   return sheet;
 }
 
-function getBackDateSheet_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(BACKDATE_SHEET_NAME);
-  if (!sheet) sheet = ss.insertSheet(BACKDATE_SHEET_NAME);
-  if (sheet.getLastRow() === 0) {
-    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
-    sheet.setFrozenRows(1);
-  }
-  ensureColumns_(sheet);
-  return sheet;
-}
-
 // Which sheet a Request ID lives in, based on its "OT"/"CR" vs "DSL" prefix.
 function sheetForId_(id) {
   var s = String(id || '');
   if (/^OT/i.test(s)) return getOfficeSheet_();
-  if (/^BACKD/i.test(s)) return getBackDateSheet_();
   if (/^CR/i.test(s)) return getCreditSheet_();
   return getSheet_();
 }
@@ -527,8 +513,6 @@ function listRequests_(status, by, limit, source) {
     rows = readRequestRows_(getOfficeSheet_(), status, by);
   } else if (source === 'credit') {
     rows = readRequestRows_(getCreditSheet_(), status, by);
-  } else if (source === 'backdate') {
-    rows = readRequestRows_(getBackDateSheet_(), status, by);
   } else if (source === 'all') {
     // Credit Diesel now goes to the Diesel Team like any other request, so it
     // is part of the merged view (still its own sheet, still has its own
@@ -571,8 +555,7 @@ function vehicleHistory_(vehicle, limit, fuelType) {
   var max = Number(limit) || 5;
   var rows = readVehicleHistoryRows_(getSheet_(), target, fuelType)
     .concat(readVehicleHistoryRows_(getOfficeSheet_(), target, fuelType))
-    .concat(readCreditHistoryRows_(target, fuelType))
-    .concat(readBackDateHistoryRows_(target, fuelType));
+    .concat(readCreditHistoryRows_(target, fuelType));
   // Row order != dispense order (an older request can still be dispensed later),
   // so we sort by actual dispense time before taking the latest N. A row with a
   // missing/corrupt dispensedAt (e.g. a manually-edited sheet cell) sorts to the
@@ -618,32 +601,6 @@ function readCreditHistoryRows_(target, fuelType) {
   return rows;
 }
 
-// Back Date entries are record-only: the picked date stands in for the fill
-// date, and each row is tagged isBackDate so the form shows a "BD" marker.
-function readBackDateHistoryRows_(target, fuelType) {
-  var sheet = getBackDateSheet_();
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
-  var data = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
-  var rows = [];
-  for (var i = 0; i < data.length; i++) {
-    var r = data[i];
-    if (!r[COL.ID - 1]) continue;
-    if (String(r[COL.VEHICLE - 1] || '').trim().toUpperCase() !== target) continue;
-    if (fuelType && String(r[COL.FUEL_TYPE - 1] || 'Diesel') !== fuelType) continue;
-    rows.push({
-      dispensedAt: r[COL.CREATED_AT - 1],
-      actualLiters: r[COL.REQ_LITERS - 1],
-      odometerKm: r[COL.ODOMETER - 1],
-      driverName: r[COL.DRIVER - 1],
-      ratePerLiter: '',
-      amount: '',
-      isBackDate: true
-    });
-  }
-  return rows;
-}
-
 // fuelType — optional ('Diesel'/'Urea'); when given, only rows of that fuel
 // type are returned (the Office form's history box switches with its tab, so
 // picking Urea shouldn't show a Diesel fill and vice versa). Empty = no filter,
@@ -659,13 +616,17 @@ function readVehicleHistoryRows_(sheet, target, fuelType) {
     if (String(r[COL.STATUS - 1]) !== 'Dispensed') continue;
     if (String(r[COL.VEHICLE - 1] || '').trim().toUpperCase() !== target) continue;
     if (fuelType && String(r[COL.FUEL_TYPE - 1] || 'Diesel') !== fuelType) continue;
+    // A Back Date request records a fill from an earlier day, so its history row
+    // shows the date the caller picked (Created At), not the day it was dispensed.
+    var isBackDate = /^BACKD/i.test(String(r[COL.ID - 1]));
     rows.push({
-      dispensedAt: r[COL.DISP_AT - 1] || dispenseTimeFromReceipt_(r[COL.RECEIPT - 1]),
+      dispensedAt: isBackDate ? r[COL.CREATED_AT - 1] : (r[COL.DISP_AT - 1] || dispenseTimeFromReceipt_(r[COL.RECEIPT - 1])),
       actualLiters: r[COL.ACTUAL_LITERS - 1],
       odometerKm: r[COL.ODOMETER - 1],
       driverName: r[COL.DRIVER - 1],
       ratePerLiter: r[COL.RATE_PER_LITER - 1],
-      amount: r[COL.AMOUNT - 1]
+      amount: r[COL.AMOUNT - 1],
+      isBackDate: isBackDate
     });
   }
   return rows;
@@ -877,10 +838,10 @@ function createCreditRequest_(body) {
   return { ok: true, requestId: id };
 }
 
-// Calling form's "Back Date" mode — records a fill from an earlier date. It
-// is a record-only entry (no Manager/Diesel Team step): written to its own
-// "Back Date" tab with BACKD### IDs, and "Created At" carries the date the
-// caller picked (with the current time of day, so same-day entries still sort).
+// Calling form's "Back Date" mode - a normal request (Manager -> Diesel Team) for a
+// fill from an earlier date: same "Requests" tab and workflow, but the ID is
+// BACKD### and "Created At" carries the date the caller picked (with the current
+// time of day, so same-day entries still sort).
 function createBackDateRequest_(body) {
   var early = dupRequestId_(body);
   if (early) return { ok: true, requestId: early, duplicate: true };
@@ -906,7 +867,7 @@ function createBackDateRequest_(body) {
   try {
     var dup = dupRequestId_(body);
     if (dup) return { ok: true, requestId: dup, duplicate: true };
-    var sheet = getBackDateSheet_();
+    var sheet = getSheet_();
     var nextRow = sheet.getLastRow() + 1;
     id = 'BACKD' + pad_(nextBackDateSeq_(sheet), 3);
 
@@ -924,7 +885,7 @@ function createBackDateRequest_(body) {
     row[COL.REQ_BY - 1] = body.requestedBy || '';
     row[COL.CONTACT - 1] = body.contactNumber || '';
     row[COL.CALL_REMARKS - 1] = body.callingRemarks || '';
-    row[COL.STATUS - 1] = 'Back Date';
+    row[COL.STATUS - 1] = 'Pending';
     row[COL.FUEL_TYPE - 1] = 'Diesel';
     row[COL.CALLER_PHOTO - 1] = callerPhotoUrl;
 
@@ -940,6 +901,11 @@ function createBackDateRequest_(body) {
   } finally {
     lock.releaseLock();
   }
+  var bdBody = (body.vehicleNo || 'Vehicle') + ' — back-dated request by ' + (body.requestedBy || 'Calling Team') + ' (' + id + ')';
+  sendPushBatch_([
+    { tokens: getManagerTokens_(), title: '🆕 New Diesel Request (Back Date)', body: bdBody, link: 'https://diesel-form.vercel.app/manager-approval.html', onInvalid: removeManagerToken_ },
+    { tokens: getAdminTokens_(), title: '🆕 New Diesel Request (Back Date)', body: bdBody, link: 'https://diesel-form.vercel.app/index.html', onInvalid: removeAdminToken_ }
+  ]);
   return { ok: true, requestId: id };
 }
 
