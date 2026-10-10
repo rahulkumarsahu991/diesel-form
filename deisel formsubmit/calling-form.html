@@ -78,6 +78,15 @@
   .credit-check input{accent-color:#7c3aed;}
   .credit-check.active{background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.3);border-radius:8px;padding:8px 10px;margin-top:8px;}
   .cr-tag{display:inline-block;background:#7c3aed;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:5px;letter-spacing:.3px;vertical-align:middle;}
+  .vlabel-row{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;}
+  .vlabel-row label{margin-bottom:0;}
+  .backdate-btn-wrap{position:relative;display:inline-block;flex-shrink:0;}
+  .backdate-btn{width:auto;margin:0 0 4px;padding:6px 12px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid rgba(217,119,6,.5);background:rgba(245,158,11,.14);color:#b45309;cursor:pointer;}
+  .backdate-btn-wrap input[type=date]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0;padding:0;border:0;}
+  .backdate-btn.active{background:#d97706;color:#fff;border-color:#d97706;}
+  .backdate-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0 6px;padding:8px 12px;border-radius:8px;background:rgba(245,158,11,.14);border:1px solid rgba(217,119,6,.45);color:#92400e;font-size:13px;font-weight:700;}
+  .backdate-banner button{width:auto;margin:0;padding:2px 8px;background:transparent;border:none;color:#92400e;font-size:15px;cursor:pointer;}
+  .bd-tag{display:inline-block;background:#d97706;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:5px;letter-spacing:.3px;vertical-align:middle;}
 
   .photo-capture{margin-top:4px;}
   .photo-btn{width:100%;margin-top:0;padding:12px;background:#fff;color:var(--navy);border:1.5px dashed var(--border);
@@ -326,8 +335,19 @@
   <div class="wrap">
     <div class="card">
       <form id="reqForm">
-        <label>Vehicle No <span class="req">*</span></label>
+        <div class="vlabel-row">
+          <label>Vehicle No <span class="req">*</span></label>
+          <span class="backdate-btn-wrap" id="backDateWrap">
+            <button type="button" class="backdate-btn" id="backDateBtn">📅 Back Date</button>
+            <input type="date" id="backDateInput" tabindex="-1" aria-label="Back date">
+          </span>
+        </div>
+        <div class="backdate-banner" id="backDateBanner" style="display:none;">
+          <span id="backDateText"></span>
+          <button type="button" id="backDateClear" title="Remove back date">✕</button>
+        </div>
         <div class="autocomplete-wrap">
+
           <input type="text" id="vehicleNo" required autocomplete="off" placeholder="Type to search...">
           <div class="suggestions" id="vehicleSuggestions"></div>
         </div>
@@ -748,7 +768,7 @@
         vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last ' + entries.length + ' Refueling</div>' +
           '<table><thead><tr><th>Date</th><th>Liters</th><th>Odometer</th><th>Driver</th></tr></thead><tbody>' +
           entries.map(function(r){
-            var litersCell = r.isCredit ? '<span class="cr-tag">CR</span> ' + esc(r.actualLiters) : esc(r.actualLiters);
+            var litersCell = r.isCredit ? '<span class="cr-tag">CR</span> ' + esc(r.actualLiters) : (r.isBackDate ? '<span class="bd-tag">BD</span> ' + esc(r.actualLiters) : esc(r.actualLiters));
             return '<tr><td>' + fmtDate(r.dispensedAt) + '</td><td>' + litersCell + '</td><td>' + esc(r.odometerKm || '-') + '</td><td>' + esc(r.driverName || '-') + '</td></tr>';
           }).join('') + '</tbody></table>';
       })
@@ -913,6 +933,7 @@
 
   function resetAfterSubmit_(){
     form.reset();
+    clearBackDate_();
     document.getElementById('fullTankCheck').checked = false;
     document.getElementById('requestedLiters').type = 'number';
     document.getElementById('requestedLiters').readOnly = false;
@@ -961,6 +982,44 @@
   setInterval(flushOutbox_, 20000);
   flushOutbox_();
 
+  /* ---------- Back Date mode: record a fill from an earlier date ----------
+     Picking a date switches the submit to the "Back Date" record (BACKD###,
+     its own sheet, Created At = the picked date); it skips Manager/Diesel Team. */
+  var backDateInput = document.getElementById('backDateInput');
+  var backDateBtn = document.getElementById('backDateBtn');
+  var backDateBanner = document.getElementById('backDateBanner');
+  var backDateText = document.getElementById('backDateText');
+  var creditCheckEl = document.getElementById('creditDieselCheck');
+  (function(){
+    var t = new Date();
+    backDateInput.max = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+  })();
+  backDateInput.addEventListener('click', function(){
+    try { if (backDateInput.showPicker) backDateInput.showPicker(); } catch(e) { /* native tap still opens it */ }
+  });
+  function applyBackDate_(){
+    var v = backDateInput.value;
+    if (!v) { clearBackDate_(); return; }
+    var p = v.split('-');
+    var label = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    backDateText.textContent = '📅 Back Date: ' + label + ' — this entry will be saved with that date (no Manager / Diesel Team step)';
+    backDateBanner.style.display = 'flex';
+    backDateBtn.classList.add('active');
+    submitBtn.textContent = 'Submit Back Date Entry';
+    creditCheckEl.checked = false;
+    creditCheckEl.closest('label').classList.remove('active');
+    creditCheckEl.disabled = true;
+  }
+  function clearBackDate_(){
+    backDateInput.value = '';
+    backDateBanner.style.display = 'none';
+    backDateBtn.classList.remove('active');
+    submitBtn.textContent = 'Submit Request';
+    creditCheckEl.disabled = false;
+  }
+  backDateInput.addEventListener('change', applyBackDate_);
+  document.getElementById('backDateClear').addEventListener('click', clearBackDate_);
+
   /* ---------- Submit ---------- */
   form.addEventListener('submit', function(e){
     e.preventDefault();
@@ -981,8 +1040,9 @@
     }
 
     var isCreditDiesel = document.getElementById('creditDieselCheck').checked;
+    var backDateVal = backDateInput.value;
     var payload = {
-      action: isCreditDiesel ? 'createCredit' : 'create',
+      action: backDateVal ? 'createBackDate' : (isCreditDiesel ? 'createCredit' : 'create'),
       vehicleNo: vehicleInput.value.trim(),
       driverId: driverIdInput.value.trim(),
       driverName: driverNameVal,
@@ -994,6 +1054,7 @@
       requestedBy: document.getElementById('requestedBy').value.trim(),
       callingRemarks: document.getElementById('callingRemarks').value.trim(),
       callerPhoto: callerPhotoDataUrl,
+      backDate: backDateVal,
       clientId: Date.now().toString(36) + Math.random().toString(36).slice(2, 10)
     };
 
@@ -1011,7 +1072,9 @@
       if (res.ok) {
         localStorage.setItem('dieselCallerName', payload.requestedBy);
         myNameInput.value = payload.requestedBy;
-        if (isCreditDiesel) {
+        if (backDateVal) {
+          showMsg('ok', '✅ Back Date entry saved:<br><span class="req-id">' + res.requestId + '</span><div class="hint">Saved with the date you picked — it is a record only, no Manager / Diesel Team step.</div>');
+        } else if (isCreditDiesel) {
           showMsg('ok', '✅ Credit Diesel submitted:<br><span class="req-id">' + res.requestId + '</span><div class="hint">No Manager approval needed — it goes straight to the Diesel Team.</div>');
         } else {
           showMsg('ok', '✅ Request submitted! Give this Request ID to the Manager:<br><span class="req-id">' + res.requestId + '</span><div class="hint">The Manager will approve it, after which it will show directly to the Diesel Team.</div>');
