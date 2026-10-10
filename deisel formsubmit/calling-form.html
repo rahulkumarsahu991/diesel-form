@@ -1002,20 +1002,16 @@
     if (!v) { clearBackDate_(); return; }
     var p = v.split('-');
     var label = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    backDateText.textContent = '📅 Back Date: ' + label + ' — this request goes to the Manager and is saved with that date';
+    backDateText.textContent = '📅 Back Date: ' + label + ' — saved with that date (goes to the Manager, or straight to the Diesel Team if Credit Diesel is ticked)';
     backDateBanner.style.display = 'flex';
     backDateBtn.classList.add('active');
     submitBtn.textContent = 'Submit Back Date Request';
-    creditCheckEl.checked = false;
-    creditCheckEl.closest('label').classList.remove('active');
-    creditCheckEl.disabled = true;
   }
   function clearBackDate_(){
     backDateInput.value = '';
     backDateBanner.style.display = 'none';
     backDateBtn.classList.remove('active');
     submitBtn.textContent = 'Submit Request';
-    creditCheckEl.disabled = false;
   }
   backDateInput.addEventListener('change', applyBackDate_);
   document.getElementById('backDateClear').addEventListener('click', clearBackDate_);
@@ -1055,6 +1051,7 @@
       callingRemarks: document.getElementById('callingRemarks').value.trim(),
       callerPhoto: callerPhotoDataUrl,
       backDate: backDateVal,
+      credit: isCreditDiesel,
       clientId: Date.now().toString(36) + Math.random().toString(36).slice(2, 10)
     };
 
@@ -1072,7 +1069,9 @@
       if (res.ok) {
         localStorage.setItem('dieselCallerName', payload.requestedBy);
         myNameInput.value = payload.requestedBy;
-        if (backDateVal) {
+        if (backDateVal && isCreditDiesel) {
+          showMsg('ok', '✅ Back Date Credit Diesel submitted:<br><span class="req-id">' + res.requestId + '</span><div class="hint">Saved with the date you picked. No Manager approval needed — it goes straight to the Diesel Team.</div>');
+        } else if (backDateVal) {
           showMsg('ok', '✅ Back Date request submitted — give this Request ID to the Manager:<br><span class="req-id">' + res.requestId + '</span><div class="hint">Saved with the date you picked. The Manager will approve it, after which it shows to the Diesel Team.</div>');
         } else if (isCreditDiesel) {
           showMsg('ok', '✅ Credit Diesel submitted:<br><span class="req-id">' + res.requestId + '</span><div class="hint">No Manager approval needed — it goes straight to the Diesel Team.</div>');

@@ -635,7 +635,8 @@
     document.getElementById('dispenseCard').style.display = 'block';
   }
 
-  function isCreditRow_(row){ return !!row && /^CR/i.test(String(row.id || '')); }
+  // CR### entries, or a Back Date (BACKD###) entry submitted with Credit ticked
+  function isCreditRow_(row){ return !!row && (/^CR/i.test(String(row.id || '')) || row.managerName === 'Credit Diesel (direct)'); }
 
   document.getElementById('ratePerLiter').addEventListener('input', updateAmount);
   document.getElementById('actualLiters').addEventListener('input', updateAmount);
@@ -846,7 +847,7 @@
     if (listStatus !== 'credit') {
       rows = officeOnly
         ? rows.filter(function(r){ return /^OT/i.test(r.id || ''); })
-        : rows.filter(function(r){ return !/^(OT|CR)/i.test(r.id || ''); }); // Credit entries show only under the Credit button
+        : rows.filter(function(r){ return !/^OT/i.test(r.id || '') && !isCreditRow_(r); }); // Credit entries show only under the Credit button
     }
     renderSummary(rows);
     renderApprovedList(rows);
@@ -893,7 +894,7 @@
     var printIconHtml = r.status === 'Dispensed' ? '<button type="button" class="rc-print-btn" title="Print receipt">🖨️</button>' : '';
 
     var officeTagHtml = /^OT/i.test(r.id || '') ? '<span class="rc-source-tag">🏭 Office/Tanker</span>' : '';
-    var creditTagHtml = /^CR/i.test(r.id || '') ? '<span class="rc-source-tag" style="background:rgba(124,58,237,.14);color:#7c3aed;">💳 Credit</span>' : '';
+    var creditTagHtml = isCreditRow_(r) ? '<span class="rc-source-tag" style="background:rgba(124,58,237,.14);color:#7c3aed;">💳 Credit</span>' : '';
     var fuelTagHtml = r.fuelType === 'Urea' ? '<span class="rc-source-tag" style="background:rgba(20,184,166,.16);color:#0d9488;">🧪 Urea</span>' : '';
 
     var head = document.createElement('div');

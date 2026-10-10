@@ -37,6 +37,7 @@
 var SHEET_NAME = 'Requests';
 var OFFICE_SHEET_NAME = 'Office-Tanker'; // Office Pump/Tanker Distribution Form — separate tab, IDs prefixed "OT"
 var CREDIT_SHEET_NAME = 'Credit Diesel'; // Calling form's "Credit Diesel" checkbox — separate tab, IDs prefixed "CR"
+var CREDIT_MARKER = 'Credit Diesel (direct)'; // Manager Name stamped on credit rows (skip-Manager marker, also used by credit Back Date rows)
 var TIMEZONE = 'Asia/Kolkata';
 
 // Gate for the "Clear All Data" button on index.html (Director/Developer view only).
@@ -434,6 +435,12 @@ function sheetForId_(id) {
   return getSheet_();
 }
 
+// True for any credit-diesel row: a CR### entry, or a BACKD### Back Date entry
+// that was submitted with the Credit box ticked (stamped with CREDIT_MARKER).
+function isCreditValues_(row) {
+  return /^CR/i.test(String(row[COL.ID - 1] || '')) || row[COL.MGR_NAME - 1] === CREDIT_MARKER;
+}
+
 // A receipt number is "RCPT-yyMMdd-HHmmss" stamped in TIMEZONE at the exact
 // moment of dispense, so it can stand in for a "Dispensed At" cell that is
 // empty (the cell has been found blank on dozens of Dispensed rows while the
@@ -512,7 +519,8 @@ function listRequests_(status, by, limit, source) {
   if (source === 'office') {
     rows = readRequestRows_(getOfficeSheet_(), status, by);
   } else if (source === 'credit') {
-    rows = readRequestRows_(getCreditSheet_(), status, by);
+    rows = readRequestRows_(getCreditSheet_(), status, by)
+      .concat(readRequestRows_(getSheet_(), status, by).filter(function(r){ return r.managerName === CREDIT_MARKER; }));
   } else if (source === 'all') {
     // Credit Diesel now goes to the Diesel Team like any other request, so it
     // is part of the merged view (still its own sheet, still has its own
@@ -521,7 +529,8 @@ function listRequests_(status, by, limit, source) {
       .concat(readRequestRows_(getOfficeSheet_(), status, by))
       .concat(readRequestRows_(getCreditSheet_(), status, by));
   } else {
-    rows = readRequestRows_(getSheet_(), status, by);
+    // Manager's view: credit Back Date rows skip the Manager, so they stay out.
+    rows = readRequestRows_(getSheet_(), status, by).filter(function(r){ return r.managerName !== CREDIT_MARKER; });
   }
   rows.sort(newestFirstByCreated_);
   var max = Number(limit) || 0;
@@ -626,7 +635,8 @@ function readVehicleHistoryRows_(sheet, target, fuelType) {
       driverName: r[COL.DRIVER - 1],
       ratePerLiter: r[COL.RATE_PER_LITER - 1],
       amount: r[COL.AMOUNT - 1],
-      isBackDate: isBackDate
+      isBackDate: isBackDate,
+      isCredit: isCreditValues_(r)
     });
   }
   return rows;
@@ -812,7 +822,7 @@ function createCreditRequest_(body) {
     // ready-to-dispense list right away. It stays on the Credit Diesel sheet
     // (CR### IDs) so Admin can still see all credit entries together.
     row[COL.STATUS - 1] = 'Approved';
-    row[COL.MGR_NAME - 1] = 'Credit Diesel (direct)';
+    row[COL.MGR_NAME - 1] = CREDIT_MARKER;
     row[COL.APPROVED_LITERS - 1] = liters;
     row[COL.APPROVED_AT - 1] = now;
     row[COL.FUEL_TYPE - 1] = 'Diesel';
@@ -843,6 +853,7 @@ function createCreditRequest_(body) {
 // BACKD### and "Created At" carries the date the caller picked (with the current
 // time of day, so same-day entries still sort).
 function createBackDateRequest_(body) {
+  var isCredit = !!body.credit;
   var early = dupRequestId_(body);
   if (early) return { ok: true, requestId: early, duplicate: true };
 
@@ -885,7 +896,16 @@ function createBackDateRequest_(body) {
     row[COL.REQ_BY - 1] = body.requestedBy || '';
     row[COL.CONTACT - 1] = body.contactNumber || '';
     row[COL.CALL_REMARKS - 1] = body.callingRemarks || '';
-    row[COL.STATUS - 1] = 'Pending';
+    if (isCredit) {
+      // Credit + Back Date: skips the Manager like any Credit Diesel — straight in
+      // as "Approved" for the Diesel Team, who enters the liters when dispensing.
+      row[COL.STATUS - 1] = 'Approved';
+      row[COL.MGR_NAME - 1] = CREDIT_MARKER;
+      row[COL.APPROVED_LITERS - 1] = row[COL.REQ_LITERS - 1];
+      row[COL.APPROVED_AT - 1] = new Date();
+    } else {
+      row[COL.STATUS - 1] = 'Pending';
+    }
     row[COL.FUEL_TYPE - 1] = 'Diesel';
     row[COL.CALLER_PHOTO - 1] = callerPhotoUrl;
 
@@ -902,10 +922,17 @@ function createBackDateRequest_(body) {
     lock.releaseLock();
   }
   var bdBody = (body.vehicleNo || 'Vehicle') + ' — back-dated request by ' + (body.requestedBy || 'Calling Team') + ' (' + id + ')';
-  sendPushBatch_([
-    { tokens: getManagerTokens_(), title: '🆕 New Diesel Request (Back Date)', body: bdBody, link: 'https://diesel-form.vercel.app/manager-approval.html', onInvalid: removeManagerToken_ },
-    { tokens: getAdminTokens_(), title: '🆕 New Diesel Request (Back Date)', body: bdBody, link: 'https://diesel-form.vercel.app/index.html', onInvalid: removeAdminToken_ }
-  ]);
+  if (isCredit) {
+    sendPushBatch_([
+      { tokens: getDieselTokens_(), title: '💳 Credit Diesel (Back Date) — Ready to Dispense', body: bdBody, link: 'https://diesel-form.vercel.app/diesel-dispense.html', onInvalid: removeDieselToken_ },
+      { tokens: getAdminTokens_(), title: '💳 New Credit Diesel (Back Date)', body: bdBody, link: 'https://diesel-form.vercel.app/index.html', onInvalid: removeAdminToken_ }
+    ]);
+  } else {
+    sendPushBatch_([
+      { tokens: getManagerTokens_(), title: '🆕 New Diesel Request (Back Date)', body: bdBody, link: 'https://diesel-form.vercel.app/manager-approval.html', onInvalid: removeManagerToken_ },
+      { tokens: getAdminTokens_(), title: '🆕 New Diesel Request (Back Date)', body: bdBody, link: 'https://diesel-form.vercel.app/index.html', onInvalid: removeAdminToken_ }
+    ]);
+  }
   return { ok: true, requestId: id };
 }
 
@@ -1155,7 +1182,7 @@ function dispenseRequest_(body) {
     var actualLiters = Number(values[COL.APPROVED_LITERS - 1]) || 0;
     // Credit Diesel has no Manager to fix the quantity, so the Diesel Team
     // enters the liters actually filled (other requests ignore body.actualLiters).
-    if (/^CR/i.test(String(body.id || ''))) {
+    if (isCreditValues_(values)) {
       actualLiters = Number(body.actualLiters) || 0;
       if (actualLiters <= 0) return { ok: false, error: 'Enter the Liters dispensed for this Credit Diesel entry.' };
       values[COL.APPROVED_LITERS - 1] = actualLiters;
