@@ -106,6 +106,7 @@
   .odo-hist th{text-align:left;font-size:10.5px;color:#6b7280;font-weight:700;padding:2px 6px 4px 0;}
   .odo-hist td{padding:3px 6px 3px 0;border-top:1px solid #e5e7eb;}
   .odo-hist .oh-delta{margin-top:6px;font-weight:700;color:#1d4ed8;}
+  .odo-hist .oh-delta.neg{color:#dc2626;}
   .odo-hist .oh-msg{color:#6b7280;}
   .card-body{max-height:0;opacity:0;overflow:hidden;padding:0 18px;
     transition:max-height .32s cubic-bezier(.4,0,.2,1),opacity .24s ease,padding .32s ease;}
@@ -585,7 +586,7 @@
       var current = Number(row.odometerKm);
       var latest = Number(rows[0].odometerKm);
       var delta = (isFinite(current) && isFinite(latest) && current > 0 && latest > 0)
-        ? '<div class="oh-delta">This request: ' + esc(row.odometerKm) + ' KM → ' + ((current - latest) >= 0 ? '+' : '') + (Math.round((current - latest) * 10) / 10) + ' KM since last fill</div>' : '';
+        ? '<div class="oh-delta' + ((current - latest) < 0 ? ' neg' : '') + '">This request: ' + esc(row.odometerKm) + ' KM → ' + ((current - latest) >= 0 ? '+' : '') + (Math.round((current - latest) * 10) / 10) + ' KM since last fill</div>' : '';
       box.innerHTML = title +
         '<table><thead><tr><th>Date</th><th>Odometer (KM)</th><th>Liters</th></tr></thead><tbody>' +
         rows.map(function(r){
