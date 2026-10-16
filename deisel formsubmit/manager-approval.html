@@ -100,6 +100,13 @@
   .card-summary{font-size:12px;color:var(--ink);margin-top:4px;font-weight:600;}
   .chevron{font-size:12px;color:var(--muted);transition:transform .2s;}
   .card.expanded .chevron{transform:rotate(180deg);}
+  .odo-hist{background:#f3f4f6;border-left:4px solid #3b82f6;border-radius:8px;padding:9px 11px;font-size:12.5px;color:#374151;}
+  .odo-hist .oh-title{font-weight:800;color:#1e3a8a;margin-bottom:6px;font-size:12px;}
+  .odo-hist table{width:100%;border-collapse:collapse;}
+  .odo-hist th{text-align:left;font-size:10.5px;color:#6b7280;font-weight:700;padding:2px 6px 4px 0;}
+  .odo-hist td{padding:3px 6px 3px 0;border-top:1px solid #e5e7eb;}
+  .odo-hist .oh-delta{margin-top:6px;font-weight:700;color:#1d4ed8;}
+  .odo-hist .oh-msg{color:#6b7280;}
   .card-body{max-height:0;opacity:0;overflow:hidden;padding:0 18px;
     transition:max-height .32s cubic-bezier(.4,0,.2,1),opacity .24s ease,padding .32s ease;}
   .card.expanded .card-body{max-height:1400px;opacity:1;padding:0 18px 18px;}
@@ -556,6 +563,41 @@
     rows.forEach(function(row){ listEl.appendChild(renderCard(row)); });
   }
 
+  /* ---------- Last 5 odometer readings of the vehicle (shown when a card is opened) ---------- */
+  var odoHistCache = {}; // vehicle -> Promise of rows, so reopening/other cards never refetch
+  function loadOdoHistory_(card, row){
+    var box = card.querySelector('[data-odo-hist]');
+    if (!box || box.getAttribute('data-loaded') === '1') return;
+    var vehicleInput = card.querySelector('input[data-field="vehicleNo"]');
+    var vehicle = (vehicleInput ? vehicleInput.value : row.vehicleNo || '').trim();
+    if (!vehicle) { box.innerHTML = '<div class="oh-msg">No vehicle number.</div>'; return; }
+    box.setAttribute('data-loaded', '1');
+    box.innerHTML = '<div class="oh-msg">Loading last 5 odometer readings…</div>';
+    var key = vehicle.toUpperCase();
+    if (!odoHistCache[key]) {
+      odoHistCache[key] = fetch(APPS_SCRIPT_URL + '?action=history&limit=5&vehicle=' + encodeURIComponent(vehicle))
+        .then(function(r){ return r.json(); })
+        .then(function(res){ if (!res.ok) throw new Error(res.error || 'Error'); return res.rows || []; });
+    }
+    odoHistCache[key].then(function(rows){
+      var title = '<div class="oh-title">📏 Last ' + (rows.length || 5) + ' odometer readings — ' + esc(vehicle) + '</div>';
+      if (!rows.length) { box.innerHTML = title + '<div class="oh-msg">No previous refueling found for this vehicle.</div>'; return; }
+      var current = Number(row.odometerKm);
+      var latest = Number(rows[0].odometerKm);
+      var delta = (isFinite(current) && isFinite(latest) && current > 0 && latest > 0)
+        ? '<div class="oh-delta">This request: ' + esc(row.odometerKm) + ' KM → ' + ((current - latest) >= 0 ? '+' : '') + (Math.round((current - latest) * 10) / 10) + ' KM since last fill</div>' : '';
+      box.innerHTML = title +
+        '<table><thead><tr><th>Date</th><th>Odometer (KM)</th><th>Liters</th></tr></thead><tbody>' +
+        rows.map(function(r){
+          return '<tr><td>' + fmtDate(r.dispensedAt) + '</td><td><b>' + esc(r.odometerKm || '-') + '</b></td><td>' + esc(r.actualLiters) + '</td></tr>';
+        }).join('') + '</tbody></table>' + delta;
+    }).catch(function(err){
+      box.removeAttribute('data-loaded');
+      box.innerHTML = '<div class="oh-msg">Could not load odometer history (' + esc(err.message) + '). Close and reopen to retry.</div>';
+      delete odoHistCache[key];
+    });
+  }
+
   function renderCard(row){
     var card = document.createElement('div');
     card.className = 'card';
@@ -580,7 +622,7 @@
     header.addEventListener('click', function(){
       var wasOpen = card.classList.contains('expanded');
       listEl.querySelectorAll('.card.expanded').forEach(function(el){ el.classList.remove('expanded'); });
-      if (!wasOpen) card.classList.add('expanded');
+      if (!wasOpen) { card.classList.add('expanded'); loadOdoHistory_(card, row); }
     });
     card.appendChild(header);
 
@@ -596,6 +638,7 @@
         field('Pump / Location', 'pumpLocation', row.pumpLocation, editable) +
         field('Odometer (KM)', 'odometerKm', row.odometerKm, false) +
         field('Requested Liters', 'requestedLiters', row.requestedLiters, false) +
+        '<div class="full"><div class="odo-hist" data-odo-hist><div class="oh-msg">Last 5 odometer readings load when you open this request…</div></div></div>' +
         field('Approved Liters', 'approvedLiters', row.approvedLiters || row.requestedLiters, editable, 'number') +
         (row.callerPhoto
           ? '<div class="full"><label>Caller Photo <span style="font-weight:400;">(tap to open full size)</span></label>' +
