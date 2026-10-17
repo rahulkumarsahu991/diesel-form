@@ -108,6 +108,9 @@
   .odo-hist .oh-delta{margin-top:6px;font-weight:700;color:#1d4ed8;}
   .odo-hist .oh-delta.neg{color:#dc2626;}
   .odo-hist .oh-msg{color:#6b7280;}
+  .odo-hist .oh-tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;}
+  .odo-hist .oh-Pending{background:#fef3c7;color:#b45309;}
+  .odo-hist .oh-Approved{background:#dcfce7;color:#15803d;}
   .card-body{max-height:0;opacity:0;overflow:hidden;padding:0 18px;
     transition:max-height .32s cubic-bezier(.4,0,.2,1),opacity .24s ease,padding .32s ease;}
   .card.expanded .card-body{max-height:1400px;opacity:1;padding:0 18px 18px;}
@@ -574,9 +577,9 @@
     if (!vehicle) { box.innerHTML = '<div class="oh-msg">No vehicle number.</div>'; return; }
     box.setAttribute('data-loaded', '1');
     box.innerHTML = '<div class="oh-msg">Loading last 5 odometer readings…</div>';
-    var key = vehicle.toUpperCase();
+    var key = vehicle.toUpperCase() + '|' + row.id; // "exclude" differs per request
     if (!odoHistCache[key]) {
-      odoHistCache[key] = fetch(APPS_SCRIPT_URL + '?action=history&limit=5&vehicle=' + encodeURIComponent(vehicle))
+      odoHistCache[key] = fetch(APPS_SCRIPT_URL + '?action=history&limit=5&includeOpen=1&exclude=' + encodeURIComponent(row.id) + '&vehicle=' + encodeURIComponent(vehicle))
         .then(function(r){ return r.json(); })
         .then(function(res){ if (!res.ok) throw new Error(res.error || 'Error'); return res.rows || []; });
     }
@@ -588,9 +591,11 @@
       var delta = (isFinite(current) && isFinite(latest) && current > 0 && latest > 0)
         ? '<div class="oh-delta' + ((current - latest) < 0 ? ' neg' : '') + '">This request: ' + esc(row.odometerKm) + ' KM → ' + ((current - latest) >= 0 ? '+' : '') + (Math.round((current - latest) * 10) / 10) + ' KM since last fill</div>' : '';
       box.innerHTML = title +
-        '<table><thead><tr><th>Date</th><th>Odometer (KM)</th><th>Liters</th></tr></thead><tbody>' +
+        '<table><thead><tr><th>Created</th><th>Dispensed</th><th>Odometer (KM)</th><th>Liters</th></tr></thead><tbody>' +
         rows.map(function(r){
-          return '<tr><td>' + fmtDate(r.dispensedAt) + '</td><td><b>' + esc(r.odometerKm || '-') + '</b></td><td>' + esc(r.actualLiters) + '</td></tr>';
+          var disp = r.dispensedAt ? fmtDate(r.dispensedAt)
+            : ((r.status === 'Pending' || r.status === 'Approved') ? '<span class="oh-tag oh-' + r.status + '">' + (r.status === 'Pending' ? '⏳ Pending' : '✔ Approved') + '</span>' : '-');
+          return '<tr><td>' + (r.createdAt ? fmtDate(r.createdAt) : '-') + '</td><td>' + disp + '</td><td><b>' + esc(r.odometerKm || '-') + '</b></td><td>' + esc(r.actualLiters) + '</td></tr>';
         }).join('') + '</tbody></table>' + delta;
     }).catch(function(err){
       box.removeAttribute('data-loaded');

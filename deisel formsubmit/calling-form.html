@@ -78,6 +78,9 @@
   .credit-check input{accent-color:#7c3aed;}
   .credit-check.active{background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.3);border-radius:8px;padding:8px 10px;margin-top:8px;}
   .cr-tag{display:inline-block;background:#7c3aed;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:5px;letter-spacing:.3px;vertical-align:middle;}
+  .ho-tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;}
+  .ho-Pending{background:#fef3c7;color:#b45309;}
+  .ho-Approved{background:#dcfce7;color:#15803d;}
   .vlabel-row{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;}
   .vlabel-row label{margin-bottom:0;}
   .backdate-btn-wrap{position:relative;display:inline-block;flex-shrink:0;}
@@ -755,7 +758,7 @@
     vehicleHistoryBox.style.display = 'block';
     vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last Refueling</div><div class="h-msg">Loading...</div>';
     // Filtering/trimming happens on the server — the full request list is never downloaded
-    fetch(APPS_SCRIPT_URL + '?action=history&limit=5&vehicle=' + encodeURIComponent(vehicle))
+    fetch(APPS_SCRIPT_URL + '?action=history&limit=5&includeOpen=1&vehicle=' + encodeURIComponent(vehicle))
       .then(function(r){ return r.json(); })
       .then(function(res){
         if (vehicleInput.value.trim() !== vehicle) return; // stale response, ignore
@@ -769,7 +772,7 @@
           '<table><thead><tr><th>Created</th><th>Dispensed</th><th>Liters</th><th>Odometer</th><th>Driver</th></tr></thead><tbody>' +
           entries.map(function(r){
             var litersCell = r.isCredit ? '<span class="cr-tag">CR</span> ' + esc(r.actualLiters) : (r.isBackDate ? '<span class="bd-tag">BD</span> ' + esc(r.actualLiters) : esc(r.actualLiters));
-            return '<tr><td>' + fmtShort_(r.createdAt) + '</td><td>' + fmtShort_(r.dispensedAt) + '</td><td>' + litersCell + '</td><td>' + esc(r.odometerKm || '-') + '</td><td>' + esc(r.driverName || '-') + '</td></tr>';
+            return '<tr><td>' + fmtShort_(r.createdAt) + '</td><td>' + (r.dispensedAt ? fmtShort_(r.dispensedAt) : (r.status === 'Pending' || r.status === 'Approved' ? '<span class="ho-tag ho-' + r.status + '">' + (r.status === 'Pending' ? '⏳ Pending' : '✔ Approved') + '</span>' : '-')) + '</td><td>' + litersCell + '</td><td>' + esc(r.odometerKm || '-') + '</td><td>' + esc(r.driverName || '-') + '</td></tr>';
           }).join('') + '</tbody></table>';
       })
       .catch(function(err){

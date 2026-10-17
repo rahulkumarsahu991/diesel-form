@@ -320,7 +320,7 @@ function doGet(e) {
     if (action === 'vehicleDriver') return jsonOut_(lookupDriverByVehicleToday_(p.vehicle));
     if (action === 'pumps') return jsonOut_(listPumps_());
     if (action === 'routes') return jsonOut_(listRoutes_());
-    if (action === 'history') return jsonOut_(vehicleHistory_(p.vehicle, p.limit || 5, p.fuelType || ''));
+    if (action === 'history') return jsonOut_(vehicleHistory_(p.vehicle, p.limit || 5, p.fuelType || '', p.includeOpen === '1', p.exclude || ''));
     // All three dropdown lists in a single round-trip (Apps Script takes ~2.5s
     // per call regardless of payload size, so fewer calls is the real speed win)
     if (action === 'lists') {
@@ -558,13 +558,17 @@ function readRequestRows_(sheet, status, by) {
 // refuel history. Merges both sheets, since a vehicle can be fueled via
 // either form. Filtered/trimmed on the server instead of downloading
 // the whole list.
-function vehicleHistory_(vehicle, limit, fuelType) {
+// includeOpen - also list requests that were submitted but not dispensed yet
+// (Pending/Approved), used by the Calling and Manager pages; exclude = a
+// request ID to leave out (the one the Manager is looking at).
+function vehicleHistory_(vehicle, limit, fuelType, includeOpen, excludeId) {
   if (!vehicle) return { ok: false, error: 'Provide a Vehicle No' };
   var target = String(vehicle).trim().toUpperCase();
   var max = Number(limit) || 5;
-  var rows = readVehicleHistoryRows_(getSheet_(), target, fuelType)
-    .concat(readVehicleHistoryRows_(getOfficeSheet_(), target, fuelType))
-    .concat(readCreditHistoryRows_(target, fuelType));
+  var rows = readVehicleHistoryRows_(getSheet_(), target, fuelType, includeOpen)
+    .concat(readVehicleHistoryRows_(getOfficeSheet_(), target, fuelType, includeOpen))
+    .concat(readCreditHistoryRows_(target, fuelType, includeOpen));
+  if (excludeId) rows = rows.filter(function(r){ return String(r.id) !== String(excludeId); });
   // Row order != dispense order (an older request can still be dispensed later),
   // so we sort by actual dispense time before taking the latest N. A row with a
   // missing/corrupt dispensedAt (e.g. a manually-edited sheet cell) sorts to the
@@ -583,7 +587,7 @@ function vehicleHistory_(vehicle, limit, fuelType) {
 // status "Credit" (the logged date stands in for a dispense time); newer ones
 // are dispensed like any other request and appear once status is "Dispensed".
 // Each row is tagged isCredit so the frontend shows a "CR" marker.
-function readCreditHistoryRows_(target, fuelType) {
+function readCreditHistoryRows_(target, fuelType, includeOpen) {
   var sheet = getCreditSheet_();
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
@@ -593,12 +597,14 @@ function readCreditHistoryRows_(target, fuelType) {
     var r = data[i];
     if (!r[COL.ID - 1]) continue;
     var st = String(r[COL.STATUS - 1]);
-    if (st !== 'Credit' && st !== 'Dispensed') continue;
+    if (st !== 'Credit' && st !== 'Dispensed' && !(includeOpen && st === 'Approved')) continue;
     if (String(r[COL.VEHICLE - 1] || '').trim().toUpperCase() !== target) continue;
     if (fuelType && String(r[COL.FUEL_TYPE - 1] || 'Diesel') !== fuelType) continue;
     var dispensed = st === 'Dispensed';
     var creditDispAt = dispensed ? (r[COL.DISP_AT - 1] || dispenseTimeFromReceipt_(r[COL.RECEIPT - 1])) : '';
     rows.push({
+      id: r[COL.ID - 1],
+      status: st,
       createdAt: r[COL.CREATED_AT - 1],
       dispensedAt: creditDispAt,
       sortAt: creditDispAt || r[COL.CREATED_AT - 1],
@@ -617,7 +623,7 @@ function readCreditHistoryRows_(target, fuelType) {
 // type are returned (the Office form's history box switches with its tab, so
 // picking Urea shouldn't show a Diesel fill and vice versa). Empty = no filter,
 // used by the Diesel-only forms (calling-form, diesel-dispense).
-function readVehicleHistoryRows_(sheet, target, fuelType) {
+function readVehicleHistoryRows_(sheet, target, fuelType, includeOpen) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
   var data = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
@@ -625,19 +631,23 @@ function readVehicleHistoryRows_(sheet, target, fuelType) {
   for (var i = 0; i < data.length; i++) {
     var r = data[i];
     if (!r[COL.ID - 1]) continue;
-    if (String(r[COL.STATUS - 1]) !== 'Dispensed') continue;
+    var st = String(r[COL.STATUS - 1]);
+    var open = st === 'Pending' || st === 'Approved';
+    if (st !== 'Dispensed' && !(includeOpen && open)) continue;
     if (String(r[COL.VEHICLE - 1] || '').trim().toUpperCase() !== target) continue;
     if (fuelType && String(r[COL.FUEL_TYPE - 1] || 'Diesel') !== fuelType) continue;
     // createdAt + dispensedAt are both returned so the form can show both. A Back
     // Date request records a fill from an earlier day, so it is ordered by the
     // date the caller picked (Created At), not by when it was dispensed.
     var isBackDate = /^BACKD/i.test(String(r[COL.ID - 1]));
-    var dispAt = r[COL.DISP_AT - 1] || dispenseTimeFromReceipt_(r[COL.RECEIPT - 1]);
+    var dispAt = open ? '' : (r[COL.DISP_AT - 1] || dispenseTimeFromReceipt_(r[COL.RECEIPT - 1]));
     rows.push({
+      id: r[COL.ID - 1],
+      status: st,
       createdAt: r[COL.CREATED_AT - 1],
       dispensedAt: dispAt,
-      sortAt: isBackDate ? r[COL.CREATED_AT - 1] : dispAt,
-      actualLiters: r[COL.ACTUAL_LITERS - 1],
+      sortAt: (isBackDate || open) ? r[COL.CREATED_AT - 1] : dispAt,
+      actualLiters: open ? (r[COL.APPROVED_LITERS - 1] || r[COL.REQ_LITERS - 1]) : r[COL.ACTUAL_LITERS - 1],
       odometerKm: r[COL.ODOMETER - 1],
       driverName: r[COL.DRIVER - 1],
       ratePerLiter: r[COL.RATE_PER_LITER - 1],
