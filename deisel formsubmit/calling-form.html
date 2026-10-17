@@ -113,7 +113,7 @@
   .driver-info.loading{background:rgba(244,245,247,.8);color:var(--muted);border:1px solid var(--border);display:block;}
 
   .history-box{margin-top:8px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.55);
-    border:1px solid var(--glass-border);font-size:12px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:none;}
+    border:1px solid var(--glass-border);font-size:12px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:none;overflow-x:auto;}
   .history-box .h-title{font-weight:700;color:var(--navy);margin-bottom:6px;font-size:12px;}
   .history-box .h-msg{color:var(--muted);}
   .history-box table{width:100%;border-collapse:collapse;font-size:11px;}
@@ -766,10 +766,10 @@
           return;
         }
         vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last ' + entries.length + ' Refueling</div>' +
-          '<table><thead><tr><th>Date</th><th>Liters</th><th>Odometer</th><th>Driver</th></tr></thead><tbody>' +
+          '<table><thead><tr><th>Created</th><th>Dispensed</th><th>Liters</th><th>Odometer</th><th>Driver</th></tr></thead><tbody>' +
           entries.map(function(r){
             var litersCell = r.isCredit ? '<span class="cr-tag">CR</span> ' + esc(r.actualLiters) : (r.isBackDate ? '<span class="bd-tag">BD</span> ' + esc(r.actualLiters) : esc(r.actualLiters));
-            return '<tr><td>' + fmtDate(r.dispensedAt) + '</td><td>' + litersCell + '</td><td>' + esc(r.odometerKm || '-') + '</td><td>' + esc(r.driverName || '-') + '</td></tr>';
+            return '<tr><td>' + fmtShort_(r.createdAt) + '</td><td>' + fmtShort_(r.dispensedAt) + '</td><td>' + litersCell + '</td><td>' + esc(r.odometerKm || '-') + '</td><td>' + esc(r.driverName || '-') + '</td></tr>';
           }).join('') + '</tbody></table>';
       })
       .catch(function(err){
@@ -1111,6 +1111,14 @@
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
     });
   }
+  // Compact date+time for the history table ("14/10/2026, 11:24 am"); blank -> "-"
+  function fmtShort_(d){
+    if (!d) return '-';
+    var t = new Date(d);
+    if (isNaN(t.getTime())) return '-';
+    return t.toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
+  }
+
   function fmtDate(d){
     if (!d) return '';
     try { return new Date(d).toLocaleString('en-IN'); } catch(e){ return d; }

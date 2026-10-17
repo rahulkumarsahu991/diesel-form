@@ -570,8 +570,8 @@ function vehicleHistory_(vehicle, limit, fuelType) {
   // missing/corrupt dispensedAt (e.g. a manually-edited sheet cell) sorts to the
   // bottom instead of NaN-comparing its way to the top.
   rows.sort(function(a, b){
-    var ta = new Date(a.dispensedAt).getTime();
-    var tb = new Date(b.dispensedAt).getTime();
+    var ta = new Date(a.sortAt || a.dispensedAt).getTime();
+    var tb = new Date(b.sortAt || b.dispensedAt).getTime();
     if (isNaN(ta)) ta = -Infinity;
     if (isNaN(tb)) tb = -Infinity;
     return tb - ta;
@@ -597,8 +597,11 @@ function readCreditHistoryRows_(target, fuelType) {
     if (String(r[COL.VEHICLE - 1] || '').trim().toUpperCase() !== target) continue;
     if (fuelType && String(r[COL.FUEL_TYPE - 1] || 'Diesel') !== fuelType) continue;
     var dispensed = st === 'Dispensed';
+    var creditDispAt = dispensed ? (r[COL.DISP_AT - 1] || dispenseTimeFromReceipt_(r[COL.RECEIPT - 1])) : '';
     rows.push({
-      dispensedAt: dispensed ? (r[COL.DISP_AT - 1] || dispenseTimeFromReceipt_(r[COL.RECEIPT - 1])) : r[COL.CREATED_AT - 1],
+      createdAt: r[COL.CREATED_AT - 1],
+      dispensedAt: creditDispAt,
+      sortAt: creditDispAt || r[COL.CREATED_AT - 1],
       actualLiters: dispensed ? r[COL.ACTUAL_LITERS - 1] : r[COL.REQ_LITERS - 1],
       odometerKm: r[COL.ODOMETER - 1],
       driverName: r[COL.DRIVER - 1],
@@ -625,11 +628,15 @@ function readVehicleHistoryRows_(sheet, target, fuelType) {
     if (String(r[COL.STATUS - 1]) !== 'Dispensed') continue;
     if (String(r[COL.VEHICLE - 1] || '').trim().toUpperCase() !== target) continue;
     if (fuelType && String(r[COL.FUEL_TYPE - 1] || 'Diesel') !== fuelType) continue;
-    // A Back Date request records a fill from an earlier day, so its history row
-    // shows the date the caller picked (Created At), not the day it was dispensed.
+    // createdAt + dispensedAt are both returned so the form can show both. A Back
+    // Date request records a fill from an earlier day, so it is ordered by the
+    // date the caller picked (Created At), not by when it was dispensed.
     var isBackDate = /^BACKD/i.test(String(r[COL.ID - 1]));
+    var dispAt = r[COL.DISP_AT - 1] || dispenseTimeFromReceipt_(r[COL.RECEIPT - 1]);
     rows.push({
-      dispensedAt: isBackDate ? r[COL.CREATED_AT - 1] : (r[COL.DISP_AT - 1] || dispenseTimeFromReceipt_(r[COL.RECEIPT - 1])),
+      createdAt: r[COL.CREATED_AT - 1],
+      dispensedAt: dispAt,
+      sortAt: isBackDate ? r[COL.CREATED_AT - 1] : dispAt,
       actualLiters: r[COL.ACTUAL_LITERS - 1],
       odometerKm: r[COL.ODOMETER - 1],
       driverName: r[COL.DRIVER - 1],
