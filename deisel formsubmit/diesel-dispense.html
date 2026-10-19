@@ -616,6 +616,7 @@
       detailRow('Driver Name', row.driverName) +
       detailRow('Route / Trip', row.routeTrip || '-') +
       detailRow('Current Location', row.currentLocation || '-') +
+      (row.pumpLocation ? detailRow('Pump Name', row.pumpLocation) : '') +
       detailRow('Odometer (KM)', row.odometerKm || '-') +
       detailRow(isCreditRow_(row) ? 'Requested Liters' : 'Approved Liters', row.approvedLiters) +
       (row.callingRemarks ? detailRow('Caller Remarks', row.callingRemarks) : '') +
