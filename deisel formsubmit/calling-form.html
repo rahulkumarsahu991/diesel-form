@@ -378,6 +378,13 @@
         <input type="number" id="requestedLiters" required min="1" step="0.1" placeholder="e.g. 100">
         <label class="full-tank-check"><input type="checkbox" id="fullTankCheck"> ⛽ Full Tank (no specific quantity)</label>
         <label class="full-tank-check credit-check"><input type="checkbox" id="creditDieselCheck"> 💳 Credit Diesel (skips Manager — goes straight to Diesel Team)</label>
+        <div id="creditPumpWrap" style="display:none;">
+          <label>Pump Name <span class="hint" style="font-weight:400;">(optional)</span></label>
+          <div class="autocomplete-wrap">
+            <input type="text" id="creditPump" autocomplete="off" placeholder="Type to search pump...">
+            <div class="suggestions" id="creditPumpSuggestions"></div>
+          </div>
+        </div>
 
         <label>Route / Trip</label>
         <div class="autocomplete-wrap">
@@ -604,6 +611,7 @@
   var vehicleInput = document.getElementById('vehicleNo');
   setupAutocomplete(vehicleInput, document.getElementById('vehicleSuggestions'), 'vehicles', function(v){ loadVehicleHistory(v); lookupDriverForVehicle(v); });
   setupAutocomplete(document.getElementById('routeTrip'), document.getElementById('routeSuggestions'), 'routes');
+  setupAutocomplete(document.getElementById('creditPump'), document.getElementById('creditPumpSuggestions'), 'pumps');
 
   /* ---------- Optional request photo (camera or gallery) ----------
      Shrunk on-device (max 1024px, JPEG q0.6) before upload. createImageBitmap
@@ -709,6 +717,10 @@
     var checkbox = document.getElementById('creditDieselCheck');
     checkbox.addEventListener('change', function(){
       checkbox.closest('label').classList.toggle('active', checkbox.checked);
+      var pumpWrap = document.getElementById('creditPumpWrap');
+      pumpWrap.style.display = checkbox.checked ? 'block' : 'none';
+      if (checkbox.checked) document.getElementById('creditPump').focus();
+      else document.getElementById('creditPump').value = '';
     });
   })();
 
@@ -942,6 +954,8 @@
     document.getElementById('requestedLiters').readOnly = false;
     document.getElementById('creditDieselCheck').checked = false;
     document.getElementById('creditDieselCheck').closest('label').classList.remove('active');
+    document.getElementById('creditPumpWrap').style.display = 'none';
+    document.getElementById('creditPump').value = '';
     resetCallerPhoto_();
     fetchedDriver = null;
     driverInfo.className = 'driver-info';
@@ -1055,6 +1069,7 @@
       callerPhoto: callerPhotoDataUrl,
       backDate: backDateVal,
       credit: isCreditDiesel,
+      pumpLocation: isCreditDiesel ? document.getElementById('creditPump').value.trim() : '',
       clientId: Date.now().toString(36) + Math.random().toString(36).slice(2, 10)
     };
 

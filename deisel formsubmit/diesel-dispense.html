@@ -632,6 +632,7 @@
     var isCredit = isCreditRow_(row);
     document.getElementById('litersWrap').style.display = isCredit ? 'block' : 'none';
     litersInput.value = isCredit && Number(row.approvedLiters) > 0 ? row.approvedLiters : '';
+    if (isCredit && row.pumpLocation) pumpInput.value = row.pumpLocation;
     document.getElementById('dispenseCard').style.display = 'block';
   }
 

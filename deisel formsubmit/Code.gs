@@ -826,6 +826,7 @@ function createCreditRequest_(body) {
     row[COL.ROUTE - 1] = body.routeTrip || '';
     row[COL.CURRENT_LOCATION - 1] = body.currentLocation || '';
     row[COL.ODOMETER - 1] = Number(body.odometerKm) || 0;
+    row[COL.PUMP - 1] = body.pumpLocation || '';
     // "Full" stays as text — there is no Manager to fix a quantity, so the
     // Diesel Team enters the real liters when dispensing (see dispenseRequest_).
     var liters = (String(body.requestedLiters || '').trim().toLowerCase() === 'full')
@@ -908,6 +909,7 @@ function createBackDateRequest_(body) {
     row[COL.ROUTE - 1] = body.routeTrip || '';
     row[COL.CURRENT_LOCATION - 1] = body.currentLocation || '';
     row[COL.ODOMETER - 1] = Number(body.odometerKm) || 0;
+    row[COL.PUMP - 1] = isCredit ? (body.pumpLocation || '') : '';
     row[COL.REQ_LITERS - 1] = (String(body.requestedLiters || '').trim().toLowerCase() === 'full')
       ? 'Full' : (Number(body.requestedLiters) || 0);
     row[COL.REQ_BY - 1] = body.requestedBy || '';
