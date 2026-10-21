@@ -739,13 +739,30 @@
      Only auto-fills the Driver ID if it's still empty, so it never overwrites
      a Driver ID the caller already typed in themselves. Filling Driver ID
      re-uses the existing Driver ID -> Name/Mobile lookup below. */
+  // Fills Route / Trip and Current Location from the Calling Sheet. A field is
+  // only (over)written if it is empty or still holds the value this function put
+  // there for the previous vehicle — anything the caller typed is left alone.
+  function autoFillField_(el, value){
+    if (!value) { // new vehicle has nothing: drop the previous vehicle's auto-filled value
+      if (el.value === el.getAttribute('data-auto')) el.value = '';
+      el.removeAttribute('data-auto');
+      return;
+    }
+    if (el.value.trim() === '' || el.value === el.getAttribute('data-auto')) {
+      el.value = value;
+      el.setAttribute('data-auto', value);
+    }
+  }
+
   function lookupDriverForVehicle(vehicle){
-    if (!vehicle || !APPS_SCRIPT_URL || driverIdInput.value.trim()) return;
+    if (!vehicle || !APPS_SCRIPT_URL) return;
     fetch(APPS_SCRIPT_URL + '?action=vehicleDriver&vehicle=' + encodeURIComponent(vehicle))
       .then(function(r){ return r.json(); })
       .then(function(res){
         if (vehicleInput.value.trim() !== vehicle) return; // stale response, ignore
-        if (!res.ok || driverIdInput.value.trim()) return; // no match, or user typed one meanwhile
+        autoFillField_(document.getElementById('routeTrip'), res.route);
+        autoFillField_(currentLocationInput, res.currentLocation);
+        if (!res.ok || driverIdInput.value.trim()) return; // no driver match, or Driver ID already filled/typed
         driverIdInput.value = res.driverId;
         if (res.name) {
           // This lookup already returns name/mobile (from the Attendance

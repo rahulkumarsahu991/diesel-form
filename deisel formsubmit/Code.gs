@@ -253,6 +253,9 @@ function registerAdminToken_(body) {
 var VEHICLE_SHEET_ID = '1wgG2K9phHMQPvIskvXF1OBHxNHFk8pegrKCi0hvuF6U';
 var VEHICLE_SHEET_NAME = 'Calling Sheet';
 var VEHICLE_COL = 3; // Column C
+var CALLING_FROM_COL = 11;    // Column K - From Location
+var CALLING_TO_COL = 12;      // Column L - To Location
+var CALLING_CURRENT_COL = 13; // Column M - Current Location
 
 // Source sheet for the Driver ID -> Name/Mobile lookup
 var DRIVER_SHEET_ID = '1wLY9CttPw-7FPP58aKLr0Ykf-Ok9uFg5B_kBGuWA-MA';
@@ -1389,9 +1392,53 @@ function lookupDriverByVehicleToday_(vehicle) {
     try { cache.put(cacheKey, JSON.stringify(map), 600); } catch (e) {} // 10 min
   }
 
+  // Route/Trip + Current Location from the Calling Sheet ride along in the same
+  // response (one round trip for the form instead of two), even when no driver
+  // is assigned today.
+  var trip = getTripInfo_(target);
   var entry = map[target];
-  if (!entry) return { ok: false, error: 'No driver assigned to this vehicle today in Attendance sheet' };
-  return { ok: true, driverId: entry.driverId, name: entry.name, mobile: entry.mobile };
+  if (!entry) return { ok: false, error: 'No driver assigned to this vehicle today in Attendance sheet', route: trip.route, currentLocation: trip.currentLocation };
+  return { ok: true, driverId: entry.driverId, name: entry.name, mobile: entry.mobile, route: trip.route, currentLocation: trip.currentLocation };
+}
+
+// Vehicle -> { route: "From to To", currentLocation } read from the Calling Sheet
+// (K = From, L = To, M = Current Location). The sheet is read once and cached
+// for 2 minutes (it changes through the day as calls are logged); the last row
+// of a vehicle wins if it appears more than once.
+function getTripInfo_(vehicleUpper) {
+  var cache = CacheService.getScriptCache();
+  var key = 'tripmap_' + Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
+  var map;
+  var cached = cache.get(key);
+  if (cached) {
+    map = JSON.parse(cached);
+  } else {
+    map = buildTripInfoMap_();
+    try { cache.put(key, JSON.stringify(map), 120); } catch (e) {}
+  }
+  return map[vehicleUpper] || { route: '', currentLocation: '' };
+}
+
+function buildTripInfoMap_() {
+  var map = {};
+  var ss = SpreadsheetApp.openById(VEHICLE_SHEET_ID);
+  var sheet = findSheetLoose_(ss, VEHICLE_SHEET_NAME);
+  if (!sheet) return map;
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return map;
+  var data = sheet.getRange(2, 1, lastRow - 1, CALLING_CURRENT_COL).getValues();
+  function clean(v) { return String(v || '').replace(/\s+/g, ' ').trim(); }
+  for (var i = 0; i < data.length; i++) {
+    var vehicle = clean(data[i][VEHICLE_COL - 1]).toUpperCase();
+    if (!vehicle) continue;
+    var from = clean(data[i][CALLING_FROM_COL - 1]);
+    var to = clean(data[i][CALLING_TO_COL - 1]);
+    map[vehicle] = {
+      route: (from && to) ? (from + ' to ' + to) : (from || to),
+      currentLocation: clean(data[i][CALLING_CURRENT_COL - 1])
+    };
+  }
+  return map;
 }
 
 function buildTodayAttendanceMap_() {
