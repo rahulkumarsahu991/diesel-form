@@ -321,6 +321,7 @@ function doGet(e) {
     if (action === 'vehicles') return jsonOut_(listVehicles_());
     if (action === 'driver') return jsonOut_(lookupDriver_(p.id));
     if (action === 'vehicleDriver') return jsonOut_(lookupDriverByVehicleToday_(p.vehicle));
+    if (action === 'warm') return jsonOut_(warmVehicleCaches_());
     if (action === 'pumps') return jsonOut_(listPumps_());
     if (action === 'routes') return jsonOut_(listRoutes_());
     if (action === 'history') return jsonOut_(vehicleHistory_(p.vehicle, p.limit || 5, p.fuelType || '', p.includeOpen === '1', p.exclude || ''));
@@ -1376,21 +1377,30 @@ function lookupDriverInAttendance_(targetLower) {
 // present or absent (attendance TRUE/FALSE is not checked).
 // Result is cached for 10 minutes (keyed by today's date) since the whole
 // sheet only needs re-reading once per day in practice.
+// Today's Vehicle -> driver map from the Attendance sheet, cached 10 minutes.
+function getAttendanceMap_() {
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'attmap2_' + Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
+  var cached = cache.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+  var map = buildTodayAttendanceMap_();
+  try { cache.put(cacheKey, JSON.stringify(map), 600); } catch (e) {} // 10 min
+  return map;
+}
+
+// Called by the Calling form when it opens (and now and then while it stays
+// open) so the two sheet reads are already cached when a vehicle is typed.
+function warmVehicleCaches_() {
+  getAttendanceMap_();
+  getTripInfo_('');
+  return { ok: true };
+}
+
 function lookupDriverByVehicleToday_(vehicle) {
   if (!vehicle) return { ok: false, error: 'Provide a Vehicle No' };
   var target = String(vehicle).trim().toUpperCase();
 
-  var cache = CacheService.getScriptCache();
-  var todayKey = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
-  var cacheKey = 'attmap2_' + todayKey;
-  var map;
-  var cached = cache.get(cacheKey);
-  if (cached) {
-    map = JSON.parse(cached);
-  } else {
-    map = buildTodayAttendanceMap_();
-    try { cache.put(cacheKey, JSON.stringify(map), 600); } catch (e) {} // 10 min
-  }
+  var map = getAttendanceMap_();
 
   // Route/Trip + Current Location from the Calling Sheet ride along in the same
   // response (one round trip for the form instead of two), even when no driver
@@ -1403,7 +1413,7 @@ function lookupDriverByVehicleToday_(vehicle) {
 
 // Vehicle -> { route: "From to To", currentLocation } read from the Calling Sheet
 // (K = From, L = To, M = Current Location). The sheet is read once and cached
-// for 2 minutes (it changes through the day as calls are logged); the last row
+// for 5 minutes (it changes through the day as calls are logged); the last row
 // of a vehicle wins if it appears more than once.
 function getTripInfo_(vehicleUpper) {
   var cache = CacheService.getScriptCache();
@@ -1414,7 +1424,7 @@ function getTripInfo_(vehicleUpper) {
     map = JSON.parse(cached);
   } else {
     map = buildTripInfoMap_();
-    try { cache.put(key, JSON.stringify(map), 120); } catch (e) {}
+    try { cache.put(key, JSON.stringify(map), 300); } catch (e) {}
   }
   return map[vehicleUpper] || { route: '', currentLocation: '' };
 }

@@ -754,6 +754,18 @@
     }
   }
 
+  // Pre-loads the Attendance + Calling Sheet data on the server so the first
+  // vehicle typed gets its driver/route/location quickly instead of waiting for
+  // two cold sheet reads. Repeated at most every 4 minutes.
+  var lastWarm_ = 0;
+  function warmVehicleCaches_(){
+    if (!APPS_SCRIPT_URL || Date.now() - lastWarm_ < 240000) return;
+    lastWarm_ = Date.now();
+    fetch(APPS_SCRIPT_URL + '?action=warm').catch(function(){});
+  }
+  warmVehicleCaches_();
+  vehicleInput.addEventListener('focus', warmVehicleCaches_);
+
   function lookupDriverForVehicle(vehicle){
     if (!vehicle || !APPS_SCRIPT_URL) return;
     fetch(APPS_SCRIPT_URL + '?action=vehicleDriver&vehicle=' + encodeURIComponent(vehicle))
