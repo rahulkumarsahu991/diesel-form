@@ -123,6 +123,8 @@
   .history-box th{text-align:left;padding:4px 6px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap;}
   .history-box td{padding:4px 6px;border-bottom:1px solid var(--border);white-space:nowrap;}
   .history-box tr:last-child td{border-bottom:none;}
+  .history-box .h-avg{margin-top:8px;padding:7px 10px;border-radius:8px;background:rgba(59,130,246,.12);border-left:4px solid #3b82f6;color:#1e3a8a;font-size:12.5px;}
+  .history-box .h-avg span{font-weight:400;color:#475569;}
 
   .list-panel{margin-top:20px;}
   .list-toggle{width:100%;text-align:left;padding:14px 18px;border-radius:16px;border:1px solid var(--glass-border);
@@ -798,11 +800,11 @@
           return;
         }
         vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last ' + entries.length + ' Refueling</div>' +
-          '<table><thead><tr><th>Created</th><th>Dispensed</th><th>Liters</th><th>Odometer</th><th>Driver</th></tr></thead><tbody>' +
-          entries.map(function(r){
+          '<table><thead><tr><th>Created</th><th>Dispensed</th><th>Liters</th><th>Odometer</th><th>Avg (KM/L)</th><th>Driver</th></tr></thead><tbody>' +
+          entries.map(function(r, idx){
             var litersCell = r.isCredit ? '<span class="cr-tag">CR</span> ' + esc(r.actualLiters) : (r.isBackDate ? '<span class="bd-tag">BD</span> ' + esc(r.actualLiters) : esc(r.actualLiters));
-            return '<tr><td>' + fmtShort_(r.createdAt) + '</td><td>' + (r.dispensedAt ? fmtShort_(r.dispensedAt) : (r.status === 'Pending' || r.status === 'Approved' ? '<span class="ho-tag ho-' + r.status + '">' + (r.status === 'Pending' ? '⏳ Pending' : '✔ Approved') + '</span>' : '-')) + '</td><td>' + litersCell + '</td><td>' + esc(r.odometerKm || '-') + '</td><td>' + esc(r.driverName || '-') + '</td></tr>';
-          }).join('') + '</tbody></table>';
+            return '<tr><td>' + fmtShort_(r.createdAt) + '</td><td>' + (r.dispensedAt ? fmtShort_(r.dispensedAt) : (r.status === 'Pending' || r.status === 'Approved' ? '<span class="ho-tag ho-' + r.status + '">' + (r.status === 'Pending' ? '⏳ Pending' : '✔ Approved') + '</span>' : '-')) + '</td><td>' + litersCell + '</td><td>' + esc(r.odometerKm || '-') + '</td><td>' + avgCell_(entries, idx) + '</td><td>' + esc(r.driverName || '-') + '</td></tr>';
+          }).join('') + '</tbody></table>' + avgSummary_(entries);
       })
       .catch(function(err){
         if (vehicleInput.value.trim() !== vehicle) return;
@@ -1146,6 +1148,32 @@
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
     });
   }
+  /* ---------- Mileage (KM per liter) from the history rows ----------
+     The odometer on a request is the reading when the fuel was asked for, so the
+     fuel taken in one fill is used up between that reading and the NEXT fill's
+     reading: avg = (next odometer - this odometer) / this fill's liters.
+     Rows are newest-first; the newest fill has no "next" yet, so it shows "-". */
+  function kmPerLiterPair_(newer, older){
+    if (!older.dispensedAt) return null; // only fills that were actually dispensed
+    var o1 = Number(older.odometerKm), o2 = Number(newer.odometerKm), l = Number(older.actualLiters);
+    if (!(o1 > 0) || !(o2 > 0) || !(l > 0) || o2 <= o1) return null;
+    return { km: o2 - o1, liters: l };
+  }
+  function avgCell_(entries, idx){
+    if (idx === 0) return '-';
+    var p = kmPerLiterPair_(entries[idx - 1], entries[idx]);
+    return p ? '<b>' + (p.km / p.liters).toFixed(2) + '</b>' : '-';
+  }
+  function avgSummary_(entries){
+    var km = 0, liters = 0, fills = 0;
+    for (var i = 1; i < entries.length; i++) {
+      var p = kmPerLiterPair_(entries[i - 1], entries[i]);
+      if (p) { km += p.km; liters += p.liters; fills++; }
+    }
+    if (!fills) return '';
+    return '<div class="h-avg">📊 Average: <b>' + (km / liters).toFixed(2) + ' KM/L</b> <span>(' + Math.round(km * 10) / 10 + ' KM on ' + Math.round(liters * 10) / 10 + ' L, last ' + fills + ' fill' + (fills > 1 ? 's' : '') + ')</span></div>';
+  }
+
   // Compact date+time for the history table ("14/10/2026, 11:24 am"); blank -> "-"
   function fmtShort_(d){
     if (!d) return '-';
