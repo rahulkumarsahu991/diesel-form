@@ -799,7 +799,10 @@
         var res = results[0], pumpRes = results[1];
         if (vehicleInput.value.trim() !== vehicle) return; // stale response, ignore
         if (!res.ok) { vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 Last Refueling</div><div class="h-msg">Error: ' + esc(res.error) + '</div>'; return; }
-        var entries = res.rows.concat(pumpRes && pumpRes.ok ? pumpRes.rows : []);
+        // A fill that has its own form in the app must show once: drop pump-sheet rows
+        // that match an app request (same day window + same liters).
+        var pumpRows = (pumpRes && pumpRes.ok ? pumpRes.rows : []).filter(function(p){ return !isDupPumpRow_(p, res.rows); });
+        var entries = res.rows.concat(pumpRows);
         entries.sort(function(a, b){
           var ta = new Date(a.sortAt || a.dispensedAt || a.createdAt).getTime();
           var tb = new Date(b.sortAt || b.dispensedAt || b.createdAt).getTime();
@@ -1174,6 +1177,24 @@
     if (idx === 0) return '-';
     var p = kmPerLiterPair_(entries[idx - 1], entries[idx]);
     return p ? '<b>' + (p.km / p.liters).toFixed(2) + '</b>' : '-';
+  }
+
+  /* A pump-sheet row is a duplicate of an app request when it falls inside that
+     request's date window (created day - 1 .. dispensed-or-created day + 1) and its
+     liters match (within 1 L / 3%; a "Full" request has no number, so date alone). */
+  function istDay_(d){ return Math.floor((new Date(d).getTime() + 19800000) / 86400000); }
+  function isDupPumpRow_(p, appRows){
+    var pDay = istDay_(p.dispensedAt || p.createdAt);
+    var pL = Number(p.actualLiters);
+    return appRows.some(function(a){
+      if (!a.createdAt) return false;
+      var from = istDay_(a.createdAt) - 1;
+      var to = istDay_(a.dispensedAt || a.createdAt) + 1;
+      if (isNaN(from) || isNaN(to) || pDay < from || pDay > to) return false;
+      var aL = Number(a.actualLiters);
+      if (!(aL > 0)) return true;
+      return Math.abs(pL - aL) <= Math.max(1, aL * 0.03);
+    });
   }
 
   // Date only ("28/10/2026") for pump-sheet fills, which carry no time of day
