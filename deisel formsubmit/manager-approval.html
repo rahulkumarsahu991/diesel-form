@@ -112,6 +112,8 @@
   .odo-hist .oh-Pending{background:#fef3c7;color:#b45309;}
   .odo-hist .oh-Approved{background:#dcfce7;color:#15803d;}
   .odo-hist .oh-pump{display:inline-block;background:#0f766e;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;}
+  .odo-hist tr.pump-row td{background:rgba(20,184,166,.20);}
+  .odo-hist tr.pump-row td:first-child{box-shadow:inset 4px 0 0 #0f766e;}
   .card-body{max-height:0;opacity:0;overflow:hidden;padding:0 18px;
     transition:max-height .32s cubic-bezier(.4,0,.2,1),opacity .24s ease,padding .32s ease;}
   .card.expanded .card-body{max-height:1400px;opacity:1;padding:0 18px 18px;}
@@ -636,7 +638,7 @@
           var disp = r.isPump ? fmtDay_(r.dispensedAt) + ' <span class="oh-pump">PUMP: ' + esc(r.pumpName) + '</span>'
             : r.dispensedAt ? fmtDate(r.dispensedAt)
             : ((r.status === 'Pending' || r.status === 'Approved') ? '<span class="oh-tag oh-' + r.status + '">' + (r.status === 'Pending' ? '⏳ Pending' : '✔ Approved') + '</span>' : '-');
-          return '<tr><td>' + (r.createdAt ? (r.isPump ? fmtDay_(r.createdAt) : fmtDate(r.createdAt)) : '-') + '</td><td>' + disp + '</td><td><b>' + esc(r.odometerKm || '-') + '</b></td><td>' + esc(r.actualLiters) + '</td></tr>';
+          return '<tr' + (r.isPump ? ' class="pump-row"' : '') + '><td>' + (r.createdAt ? (r.isPump ? fmtDay_(r.createdAt) : fmtDate(r.createdAt)) : '-') + '</td><td>' + disp + '</td><td><b>' + esc(r.odometerKm || '-') + '</b></td><td>' + esc(r.actualLiters) + '</td></tr>';
         }).join('') + '</tbody></table>' + delta;
     }).catch(function(err){
       box.removeAttribute('data-loaded');
