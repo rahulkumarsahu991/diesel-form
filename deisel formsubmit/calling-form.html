@@ -90,6 +90,7 @@
   .backdate-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0 6px;padding:8px 12px;border-radius:8px;background:rgba(245,158,11,.14);border:1px solid rgba(217,119,6,.45);color:#92400e;font-size:13px;font-weight:700;}
   .backdate-banner button{width:auto;margin:0;padding:2px 8px;background:transparent;border:none;color:#92400e;font-size:15px;cursor:pointer;}
   .bd-tag{display:inline-block;background:#d97706;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:5px;letter-spacing:.3px;vertical-align:middle;}
+  .pp-tag{display:inline-block;background:#0f766e;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:5px;letter-spacing:.3px;vertical-align:middle;}
 
   .photo-capture{margin-top:4px;}
   .photo-btn{width:100%;margin-top:0;padding:12px;background:#fff;color:var(--navy);border:1.5px dashed var(--border);
@@ -787,12 +788,24 @@
     vehicleHistoryBox.style.display = 'block';
     vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last Refueling</div><div class="h-msg">Loading...</div>';
     // Filtering/trimming happens on the server — the full request list is never downloaded
-    fetch(APPS_SCRIPT_URL + '?action=history&limit=5&includeOpen=1&vehicle=' + encodeURIComponent(vehicle))
-      .then(function(r){ return r.json(); })
-      .then(function(res){
+    // Two calls in parallel: the app's own history, plus fills made at a pump
+    // outside the app (pump sheet, no OTP). They are merged by date, newest first;
+    // if the pump-sheet call fails the app history still shows.
+    Promise.all([
+      fetch(APPS_SCRIPT_URL + '?action=history&limit=5&includeOpen=1&vehicle=' + encodeURIComponent(vehicle)).then(function(r){ return r.json(); }),
+      fetch(APPS_SCRIPT_URL + '?action=pumpHistory&limit=5&vehicle=' + encodeURIComponent(vehicle)).then(function(r){ return r.json(); }).catch(function(){ return { ok: false, rows: [] }; })
+    ])
+      .then(function(results){
+        var res = results[0], pumpRes = results[1];
         if (vehicleInput.value.trim() !== vehicle) return; // stale response, ignore
         if (!res.ok) { vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 Last Refueling</div><div class="h-msg">Error: ' + esc(res.error) + '</div>'; return; }
-        var entries = res.rows;
+        var entries = res.rows.concat(pumpRes && pumpRes.ok ? pumpRes.rows : []);
+        entries.sort(function(a, b){
+          var ta = new Date(a.sortAt || a.dispensedAt || a.createdAt).getTime();
+          var tb = new Date(b.sortAt || b.dispensedAt || b.createdAt).getTime();
+          return (isNaN(tb) ? -Infinity : tb) - (isNaN(ta) ? -Infinity : ta);
+        });
+        entries = entries.slice(0, 5);
         if (!entries.length) {
           vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last Refueling</div><div class="h-msg">No previous refueling found for this vehicle.</div>';
           return;
@@ -801,7 +814,7 @@
           '<table><thead><tr><th>Created</th><th>Dispensed</th><th>Liters</th><th>Odometer</th><th>Avg (KM/L)</th><th>Driver</th></tr></thead><tbody>' +
           entries.map(function(r, idx){
             var litersCell = r.isCredit ? '<span class="cr-tag">CR</span> ' + esc(r.actualLiters) : (r.isBackDate ? '<span class="bd-tag">BD</span> ' + esc(r.actualLiters) : esc(r.actualLiters));
-            return '<tr><td>' + fmtShort_(r.createdAt) + '</td><td>' + (r.dispensedAt ? fmtShort_(r.dispensedAt) : (r.status === 'Pending' || r.status === 'Approved' ? '<span class="ho-tag ho-' + r.status + '">' + (r.status === 'Pending' ? '⏳ Pending' : '✔ Approved') + '</span>' : '-')) + '</td><td>' + litersCell + '</td><td>' + esc(r.odometerKm || '-') + '</td><td>' + avgCell_(entries, idx) + '</td><td>' + esc(r.driverName || '-') + '</td></tr>';
+            return '<tr><td>' + (r.isPump ? fmtDay_(r.createdAt) : fmtShort_(r.createdAt)) + '</td><td>' + (r.dispensedAt ? (r.isPump ? fmtDay_(r.dispensedAt) : fmtShort_(r.dispensedAt)) : (r.status === 'Pending' || r.status === 'Approved' ? '<span class="ho-tag ho-' + r.status + '">' + (r.status === 'Pending' ? '⏳ Pending' : '✔ Approved') + '</span>' : '-')) + '</td><td>' + litersCell + '</td><td>' + esc(r.odometerKm || '-') + '</td><td>' + avgCell_(entries, idx) + '</td><td>' + (r.isPump ? '<span class="pp-tag">PUMP</span> ' + esc(r.pumpName) : esc(r.driverName || '-')) + '</td></tr>';
           }).join('') + '</tbody></table>';
       })
       .catch(function(err){
@@ -1163,6 +1176,13 @@
     return p ? '<b>' + (p.km / p.liters).toFixed(2) + '</b>' : '-';
   }
 
+  // Date only ("28/10/2026") for pump-sheet fills, which carry no time of day
+  function fmtDay_(d){
+    if (!d) return '-';
+    var t = new Date(d);
+    if (isNaN(t.getTime())) return '-';
+    return t.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
   // Compact date+time for the history table ("14/10/2026, 11:24 am"); blank -> "-"
   function fmtShort_(d){
     if (!d) return '-';

@@ -324,6 +324,7 @@ function doGet(e) {
     if (action === 'pumps') return jsonOut_(listPumps_());
     if (action === 'routes') return jsonOut_(listRoutes_());
     if (action === 'history') return jsonOut_(vehicleHistory_(p.vehicle, p.limit || 5, p.fuelType || '', p.includeOpen === '1', p.exclude || ''));
+    if (action === 'pumpHistory') return jsonOut_(pumpSheetHistory_(p.vehicle, p.limit || 5));
     // All three dropdown lists in a single round-trip (Apps Script takes ~2.5s
     // per call regardless of payload size, so fewer calls is the real speed win)
     if (action === 'lists') {
@@ -561,6 +562,58 @@ function readRequestRows_(sheet, status, by) {
 // refuel history. Merges both sheets, since a vehicle can be fueled via
 // either form. Filtered/trimmed on the server instead of downloading
 // the whole list.
+// Fills made at a pump OUTSIDE this app (no OTP) are only recorded in the pump
+// sheet ("NEW DIESEL&UREA": A = pump, B = date dd-MM-yyyy, C = vehicle, D = liters,
+// I = KM). Fills that did go through the app also appear there but under a pump
+// name containing "OTP" (e.g. "HPCL OTP DMRPL"), so those are skipped here to
+// avoid listing the same fill twice. Only the newest ~8000 rows are read (the
+// sheet is appended chronologically and has 17k+ rows); result cached 5 min.
+function pumpSheetHistory_(vehicle, limit) {
+  if (!vehicle) return { ok: false, error: 'Provide a Vehicle No' };
+  var target = String(vehicle).replace(/\s+/g, '').toUpperCase();
+  var max = Number(limit) || 5;
+  var cache = CacheService.getScriptCache();
+  var key = 'pumph_' + target;
+  var cached = cache.get(key);
+  if (cached) return { ok: true, rows: JSON.parse(cached).slice(0, max) };
+
+  var ss = SpreadsheetApp.openById(PUMP_SHEET_ID);
+  var sheet = findSheetLoose_(ss, PUMP_SHEET_NAME);
+  if (!sheet) return { ok: true, rows: [] };
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { ok: true, rows: [] };
+  var startRow = Math.max(2, lastRow - 8000 + 1);
+  var data = sheet.getRange(startRow, 1, lastRow - startRow + 1, 9).getValues();
+  var rows = [];
+  for (var i = 0; i < data.length; i++) {
+    var r = data[i];
+    if (String(r[2] || '').replace(/\s+/g, '').toUpperCase() !== target) continue;
+    var pump = String(r[0] || '').replace(/\s+/g, ' ').trim();
+    if (!pump || /OTP/i.test(pump)) continue;
+    var liters = Number(r[3]);
+    if (!(liters > 0)) continue;
+    var when = parsePumpSheetDate_(r[1]);
+    if (!when) continue;
+    var km = Number(r[8]);
+    rows.push({
+      createdAt: when, dispensedAt: when, sortAt: when,
+      actualLiters: liters, odometerKm: km > 0 ? km : '',
+      driverName: '', pumpName: pump, isPump: true
+    });
+  }
+  rows.sort(function(a, b){ return b.sortAt - a.sortAt; });
+  rows = rows.slice(0, 10);
+  try { cache.put(key, JSON.stringify(rows), 300); } catch (e) {}
+  return { ok: true, rows: rows.slice(0, max) };
+}
+
+function parsePumpSheetDate_(v) {
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  var m = String(v || '').trim().match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+  if (!m) return null;
+  return Utilities.parseDate(pad_(m[1], 2) + '-' + pad_(m[2], 2) + '-' + m[3], TIMEZONE, 'dd-MM-yyyy');
+}
+
 // includeOpen - also list requests that were submitted but not dispensed yet
 // (Pending/Approved), used by the Calling and Manager pages; exclude = a
 // request ID to leave out (the one the Manager is looking at).
