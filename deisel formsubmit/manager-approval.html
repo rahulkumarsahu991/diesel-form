@@ -111,6 +111,7 @@
   .odo-hist .oh-tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;}
   .odo-hist .oh-Pending{background:#fef3c7;color:#b45309;}
   .odo-hist .oh-Approved{background:#dcfce7;color:#15803d;}
+  .odo-hist .oh-pump{display:inline-block;background:#0f766e;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;}
   .card-body{max-height:0;opacity:0;overflow:hidden;padding:0 18px;
     transition:max-height .32s cubic-bezier(.4,0,.2,1),opacity .24s ease,padding .32s ease;}
   .card.expanded .card-body{max-height:1400px;opacity:1;padding:0 18px 18px;}
@@ -567,6 +568,31 @@
     rows.forEach(function(row){ listEl.appendChild(renderCard(row)); });
   }
 
+  // Date only ("28/10/2026") for pump-sheet fills, which carry no time of day
+  function fmtDay_(d){
+    if (!d) return '-';
+    var t = new Date(d);
+    if (isNaN(t.getTime())) return '-';
+    return t.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+  /* A pump-sheet row duplicates an app request when it falls inside that request's
+     date window (created day - 1 .. dispensed-or-created day + 1) and the liters
+     match (within 1 L / 3%; a "Full" request has no number, so date alone). */
+  function istDay_(d){ return Math.floor((new Date(d).getTime() + 19800000) / 86400000); }
+  function isDupPumpRow_(p, appRows){
+    var pDay = istDay_(p.dispensedAt || p.createdAt);
+    var pL = Number(p.actualLiters);
+    return (appRows || []).some(function(a){
+      if (!a.createdAt) return false;
+      var from = istDay_(a.createdAt) - 1;
+      var to = istDay_(a.dispensedAt || a.createdAt) + 1;
+      if (isNaN(from) || isNaN(to) || pDay < from || pDay > to) return false;
+      var aL = Number(a.actualLiters);
+      if (!(aL > 0)) return true;
+      return Math.abs(pL - aL) <= Math.max(1, aL * 0.03);
+    });
+  }
+
   /* ---------- Last 5 odometer readings of the vehicle (shown when a card is opened) ---------- */
   var odoHistCache = {}; // vehicle -> Promise of rows, so reopening/other cards never refetch
   function loadOdoHistory_(card, row){
@@ -579,23 +605,38 @@
     box.innerHTML = '<div class="oh-msg">Loading last 5 odometer readings…</div>';
     var key = vehicle.toUpperCase() + '|' + row.id; // "exclude" differs per request
     if (!odoHistCache[key]) {
-      odoHistCache[key] = fetch(APPS_SCRIPT_URL + '?action=history&limit=5&includeOpen=1&exclude=' + encodeURIComponent(row.id) + '&vehicle=' + encodeURIComponent(vehicle))
-        .then(function(r){ return r.json(); })
-        .then(function(res){ if (!res.ok) throw new Error(res.error || 'Error'); return res.rows || []; });
+      // App history + fills made at a pump outside the app (pump sheet), fetched in parallel.
+      odoHistCache[key] = Promise.all([
+        fetch(APPS_SCRIPT_URL + '?action=history&limit=5&includeOpen=1&exclude=' + encodeURIComponent(row.id) + '&vehicle=' + encodeURIComponent(vehicle)).then(function(r){ return r.json(); }),
+        fetch(APPS_SCRIPT_URL + '?action=pumpHistory&limit=5&vehicle=' + encodeURIComponent(vehicle)).then(function(r){ return r.json(); }).catch(function(){ return { ok: false, rows: [] }; })
+      ]).then(function(results){
+        var res = results[0], pumpRes = results[1];
+        if (!res.ok) throw new Error(res.error || 'Error');
+        var pumpRows = (pumpRes && pumpRes.ok ? pumpRes.rows : []).filter(function(p){ return !isDupPumpRow_(p, res.rows); });
+        var all = (res.rows || []).concat(pumpRows);
+        all.sort(function(a, b){
+          var ta = new Date(a.sortAt || a.dispensedAt || a.createdAt).getTime();
+          var tb = new Date(b.sortAt || b.dispensedAt || b.createdAt).getTime();
+          return (isNaN(tb) ? -Infinity : tb) - (isNaN(ta) ? -Infinity : ta);
+        });
+        return all.slice(0, 5);
+      });
     }
     odoHistCache[key].then(function(rows){
       var title = '<div class="oh-title">📏 Last ' + (rows.length || 5) + ' odometer readings — ' + esc(vehicle) + '</div>';
       if (!rows.length) { box.innerHTML = title + '<div class="oh-msg">No previous refueling found for this vehicle.</div>'; return; }
       var current = Number(row.odometerKm);
-      var latest = Number(rows[0].odometerKm);
+      var withOdo = rows.filter(function(r){ return Number(r.odometerKm) > 0; })[0];
+      var latest = withOdo ? Number(withOdo.odometerKm) : NaN;
       var delta = (isFinite(current) && isFinite(latest) && current > 0 && latest > 0)
         ? '<div class="oh-delta' + ((current - latest) < 0 ? ' neg' : '') + '">This request: ' + esc(row.odometerKm) + ' KM → ' + ((current - latest) >= 0 ? '+' : '') + (Math.round((current - latest) * 10) / 10) + ' KM since last fill</div>' : '';
       box.innerHTML = title +
         '<table><thead><tr><th>Created</th><th>Dispensed</th><th>Odometer (KM)</th><th>Liters</th></tr></thead><tbody>' +
         rows.map(function(r){
-          var disp = r.dispensedAt ? fmtDate(r.dispensedAt)
+          var disp = r.isPump ? fmtDay_(r.dispensedAt) + ' <span class="oh-pump">PUMP: ' + esc(r.pumpName) + '</span>'
+            : r.dispensedAt ? fmtDate(r.dispensedAt)
             : ((r.status === 'Pending' || r.status === 'Approved') ? '<span class="oh-tag oh-' + r.status + '">' + (r.status === 'Pending' ? '⏳ Pending' : '✔ Approved') + '</span>' : '-');
-          return '<tr><td>' + (r.createdAt ? fmtDate(r.createdAt) : '-') + '</td><td>' + disp + '</td><td><b>' + esc(r.odometerKm || '-') + '</b></td><td>' + esc(r.actualLiters) + '</td></tr>';
+          return '<tr><td>' + (r.createdAt ? (r.isPump ? fmtDay_(r.createdAt) : fmtDate(r.createdAt)) : '-') + '</td><td>' + disp + '</td><td><b>' + esc(r.odometerKm || '-') + '</b></td><td>' + esc(r.actualLiters) + '</td></tr>';
         }).join('') + '</tbody></table>' + delta;
     }).catch(function(err){
       box.removeAttribute('data-loaded');
