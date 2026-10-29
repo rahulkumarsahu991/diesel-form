@@ -38,6 +38,7 @@ var SHEET_NAME = 'Requests';
 var OFFICE_SHEET_NAME = 'Office-Tanker'; // Office Pump/Tanker Distribution Form — separate tab, IDs prefixed "OT"
 var CREDIT_SHEET_NAME = 'Credit Diesel'; // Calling form's "Credit Diesel" checkbox — separate tab, IDs prefixed "CR"
 var CREDIT_MARKER = 'Credit Diesel (direct)'; // Manager Name stamped on credit rows (skip-Manager marker, also used by credit Back Date rows)
+var PARTY_MARKER = 'Party Diesel (direct)'; // Manager Name stamped on Party Diesel rows (skip-Manager marker); IDs prefixed "PD", stored in the Requests tab
 var TIMEZONE = 'Asia/Kolkata';
 
 // Gate for the "Clear All Data" button on index.html (Director/Developer view only).
@@ -349,6 +350,7 @@ function doPost(e) {
     if (action === 'create') return jsonOut_(createRequest_(body));
     if (action === 'createOffice') return jsonOut_(createOfficeRequest_(body));
     if (action === 'createCredit') return jsonOut_(createCreditRequest_(body));
+    if (action === 'createParty') return jsonOut_(createPartyRequest_(body));
     if (action === 'createBackDate') return jsonOut_(createBackDateRequest_(body));
     if (action === 'approve') return jsonOut_(approveRequest_(body));
     if (action === 'reject') return jsonOut_(rejectRequest_(body));
@@ -445,6 +447,11 @@ function isCreditValues_(row) {
   return /^CR/i.test(String(row[COL.ID - 1] || '')) || row[COL.MGR_NAME - 1] === CREDIT_MARKER;
 }
 
+// A Party Diesel entry (PD###): diesel taken from a party, sent straight to the Diesel Team.
+function isPartyValues_(row) {
+  return row[COL.MGR_NAME - 1] === PARTY_MARKER;
+}
+
 // A receipt number is "RCPT-yyMMdd-HHmmss" stamped in TIMEZONE at the exact
 // moment of dispense, so it can stand in for a "Dispensed At" cell that is
 // empty (the cell has been found blank on dozens of Dispensed rows while the
@@ -525,6 +532,8 @@ function listRequests_(status, by, limit, source) {
   } else if (source === 'credit') {
     rows = readRequestRows_(getCreditSheet_(), status, by)
       .concat(readRequestRows_(getSheet_(), status, by).filter(function(r){ return r.managerName === CREDIT_MARKER; }));
+  } else if (source === 'party') {
+    rows = readRequestRows_(getSheet_(), status, by).filter(function(r){ return r.managerName === PARTY_MARKER; });
   } else if (source === 'all') {
     // Credit Diesel now goes to the Diesel Team like any other request, so it
     // is part of the merged view (still its own sheet, still has its own
@@ -533,8 +542,8 @@ function listRequests_(status, by, limit, source) {
       .concat(readRequestRows_(getOfficeSheet_(), status, by))
       .concat(readRequestRows_(getCreditSheet_(), status, by));
   } else {
-    // Manager's view: credit Back Date rows skip the Manager, so they stay out.
-    rows = readRequestRows_(getSheet_(), status, by).filter(function(r){ return r.managerName !== CREDIT_MARKER; });
+    // Manager's view: credit Back Date and Party Diesel rows skip the Manager, so they stay out.
+    rows = readRequestRows_(getSheet_(), status, by).filter(function(r){ return r.managerName !== CREDIT_MARKER && r.managerName !== PARTY_MARKER; });
   }
   rows.sort(newestFirstByCreated_);
   var max = Number(limit) || 0;
@@ -709,7 +718,8 @@ function readVehicleHistoryRows_(sheet, target, fuelType, includeOpen) {
       ratePerLiter: r[COL.RATE_PER_LITER - 1],
       amount: r[COL.AMOUNT - 1],
       isBackDate: isBackDate,
-      isCredit: isCreditValues_(r)
+      isCredit: isCreditValues_(r),
+      isParty: isPartyValues_(r)
     });
   }
   return rows;
@@ -920,6 +930,86 @@ function createCreditRequest_(body) {
     { tokens: getAdminTokens_(), title: '💳 New Credit Diesel', body: creditBody, link: 'https://diesel-form.vercel.app/index.html', onInvalid: removeAdminToken_ }
   ]);
   return { ok: true, requestId: id };
+}
+
+// Calling form's "Party Diesel" mode - diesel taken from a party. A normal-shaped
+// request that skips the Manager: it is written into the Requests tab as
+// "Approved" (ID PD###) so the Diesel Team sees it right away under their
+// "Party Diesel" button and enters the liters / pump / rate when dispensing.
+function createPartyRequest_(body) {
+  var early = dupRequestId_(body);
+  if (early) return { ok: true, requestId: early, duplicate: true };
+
+  var callerPhotoUrl = '';
+  if (body.callerPhoto) {
+    var safeVehicle = String(body.vehicleNo || 'vehicle').replace(/[^A-Za-z0-9_-]/g, '');
+    callerPhotoUrl = uploadPhotoFromDataUrl_(body.callerPhoto,
+      'party_' + safeVehicle + '_' + Utilities.formatDate(new Date(), TIMEZONE, 'yyyyMMdd-HHmmss'));
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  var id;
+  try {
+    var dup = dupRequestId_(body);
+    if (dup) return { ok: true, requestId: dup, duplicate: true };
+    var sheet = getSheet_();
+    var nextRow = sheet.getLastRow() + 1;
+    id = 'PD' + pad_(nextPartySeq_(sheet), 3);
+    var now = new Date();
+    var liters = (String(body.requestedLiters || '').trim().toLowerCase() === 'full')
+      ? 'Full' : (Number(body.requestedLiters) || 0);
+
+    var row = [];
+    row[COL.ID - 1] = id;
+    row[COL.CREATED_AT - 1] = now;
+    row[COL.VEHICLE - 1] = body.vehicleNo || '';
+    row[COL.DRIVER_ID - 1] = body.driverId || '';
+    row[COL.DRIVER - 1] = body.driverName || '';
+    row[COL.ROUTE - 1] = body.routeTrip || '';
+    row[COL.CURRENT_LOCATION - 1] = body.currentLocation || '';
+    row[COL.ODOMETER - 1] = Number(body.odometerKm) || 0;
+    row[COL.REQ_LITERS - 1] = liters;
+    row[COL.REQ_BY - 1] = body.requestedBy || '';
+    row[COL.CONTACT - 1] = body.contactNumber || '';
+    row[COL.CALL_REMARKS - 1] = body.callingRemarks || '';
+    row[COL.STATUS - 1] = 'Approved';
+    row[COL.MGR_NAME - 1] = PARTY_MARKER;
+    row[COL.APPROVED_LITERS - 1] = liters;
+    row[COL.APPROVED_AT - 1] = now;
+    row[COL.FUEL_TYPE - 1] = 'Diesel';
+    row[COL.CALLER_PHOTO - 1] = callerPhotoUrl;
+
+    if (callerPhotoUrl) {
+      sheet.getRange(nextRow, COL.CALLER_PHOTO).setNumberFormat('@');
+      var hdrCell = sheet.getRange(1, COL.CALLER_PHOTO);
+      if (!hdrCell.getValue()) hdrCell.setValue('Caller Photo');
+    }
+
+    sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
+    SpreadsheetApp.flush();
+    rememberClientId_(body, id);
+  } finally {
+    lock.releaseLock();
+  }
+  var pdBody = (body.vehicleNo || 'Vehicle') + ' — party diesel by ' + (body.requestedBy || 'Calling Team') + ' (' + id + ')';
+  sendPushBatch_([
+    { tokens: getDieselTokens_(), title: '🤝 Party Diesel — Ready to Dispense', body: pdBody, link: 'https://diesel-form.vercel.app/diesel-dispense.html', onInvalid: removeDieselToken_ },
+    { tokens: getAdminTokens_(), title: '🤝 New Party Diesel', body: pdBody, link: 'https://diesel-form.vercel.app/index.html', onInvalid: removeAdminToken_ }
+  ]);
+  return { ok: true, requestId: id };
+}
+
+function nextPartySeq_(sheet) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 1;
+  var ids = sheet.getRange(2, COL.ID, lastRow - 1, 1).getValues();
+  var maxSeq = 0;
+  for (var i = 0; i < ids.length; i++) {
+    var m = String(ids[i][0] || '').match(/^PD(\d+)$/);
+    if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
+  }
+  return maxSeq + 1;
 }
 
 // Calling form's "Back Date" mode - a normal request (Manager -> Diesel Team) for a
@@ -1257,9 +1347,9 @@ function dispenseRequest_(body) {
     var actualLiters = Number(values[COL.APPROVED_LITERS - 1]) || 0;
     // Credit Diesel has no Manager to fix the quantity, so the Diesel Team
     // enters the liters actually filled (other requests ignore body.actualLiters).
-    if (isCreditValues_(values)) {
+    if (isCreditValues_(values) || isPartyValues_(values)) {
       actualLiters = Number(body.actualLiters) || 0;
-      if (actualLiters <= 0) return { ok: false, error: 'Enter the Liters dispensed for this Credit Diesel entry.' };
+      if (actualLiters <= 0) return { ok: false, error: 'Enter the Liters dispensed for this entry.' };
       values[COL.APPROVED_LITERS - 1] = actualLiters;
     }
     var ratePerLiter = Number(body.ratePerLiter) || 0;

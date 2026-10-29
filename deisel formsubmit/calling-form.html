@@ -91,6 +91,15 @@
   .backdate-banner button{width:auto;margin:0;padding:2px 8px;background:transparent;border:none;color:#92400e;font-size:15px;cursor:pointer;}
   .bd-tag{display:inline-block;background:#d97706;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:5px;letter-spacing:.3px;vertical-align:middle;}
   .pp-tag{display:inline-block;background:#0f766e;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:5px;letter-spacing:.3px;vertical-align:middle;}
+  .vbtns{display:flex;align-items:flex-end;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;}
+  .party-btn{width:auto;margin:0 0 4px;padding:6px 12px;font-size:12px;font-weight:700;border-radius:8px;border:1px solid rgba(5,150,105,.55);background:rgba(16,185,129,.14);color:#047857;cursor:pointer;}
+  .party-btn.active{background:#059669;color:#fff;border-color:#059669;}
+  .party-btn:disabled,.backdate-btn:disabled{opacity:.45;cursor:not-allowed;}
+  .party-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0 6px;padding:8px 12px;border-radius:8px;background:rgba(16,185,129,.18);border:1px solid rgba(5,150,105,.5);color:#065f46;font-size:13px;font-weight:700;}
+  .party-banner button{width:auto;margin:0;padding:2px 8px;background:transparent;border:none;color:#065f46;font-size:15px;cursor:pointer;}
+  .card.party-mode{background:linear-gradient(160deg,rgba(209,250,229,.92),rgba(167,243,208,.82));border:2px solid #059669;box-shadow:0 0 0 4px rgba(16,185,129,.18);}
+  .card.party-mode #submitBtn{background:linear-gradient(135deg,#059669,#047857);}
+  .pd-tag{display:inline-block;background:#059669;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:5px;letter-spacing:.3px;vertical-align:middle;}
   .history-box tr.pump-row td{background:rgba(20,184,166,.20);}
   .history-box tr.pump-row td:first-child{box-shadow:inset 4px 0 0 #0f766e;}
 
@@ -343,14 +352,21 @@
       <form id="reqForm">
         <div class="vlabel-row">
           <label>Vehicle No <span class="req">*</span></label>
+          <span class="vbtns">
+          <button type="button" class="party-btn" id="partyBtn">🤝 Party Diesel</button>
           <span class="backdate-btn-wrap" id="backDateWrap">
             <button type="button" class="backdate-btn" id="backDateBtn">📅 Back Date</button>
             <input type="date" id="backDateInput" tabindex="-1" aria-label="Back date">
+          </span>
           </span>
         </div>
         <div class="backdate-banner" id="backDateBanner" style="display:none;">
           <span id="backDateText"></span>
           <button type="button" id="backDateClear" title="Remove back date">✕</button>
+        </div>
+        <div class="party-banner" id="partyBanner" style="display:none;">
+          <span>🤝 Party Diesel — goes straight to the Diesel Team (no Manager step)</span>
+          <button type="button" id="partyClear" title="Back to a normal request">✕</button>
         </div>
         <div class="autocomplete-wrap">
 
@@ -818,7 +834,7 @@
         vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last ' + entries.length + ' Refueling</div>' +
           '<table><thead><tr><th>Created</th><th>Dispensed</th><th>Liters</th><th>Odometer</th><th>Avg (KM/L)</th><th>Driver</th></tr></thead><tbody>' +
           entries.map(function(r, idx){
-            var litersCell = r.isCredit ? '<span class="cr-tag">CR</span> ' + esc(r.actualLiters) : (r.isBackDate ? '<span class="bd-tag">BD</span> ' + esc(r.actualLiters) : esc(r.actualLiters));
+            var litersCell = r.isCredit ? '<span class="cr-tag">CR</span> ' + esc(r.actualLiters) : (r.isBackDate ? '<span class="bd-tag">BD</span> ' + esc(r.actualLiters) : (r.isParty ? '<span class="pd-tag">PD</span> ' + esc(r.actualLiters) : esc(r.actualLiters)));
             return '<tr' + (r.isPump ? ' class="pump-row"' : '') + '><td>' + (r.isPump ? fmtDay_(r.createdAt) : fmtShort_(r.createdAt)) + '</td><td>' + (r.dispensedAt ? (r.isPump ? fmtDay_(r.dispensedAt) : fmtShort_(r.dispensedAt)) : (r.status === 'Pending' || r.status === 'Approved' ? '<span class="ho-tag ho-' + r.status + '">' + (r.status === 'Pending' ? '⏳ Pending' : '✔ Approved') + '</span>' : '-')) + '</td><td>' + litersCell + '</td><td>' + esc(r.odometerKm || '-') + '</td><td>' + avgCell_(entries, idx) + '</td><td>' + (r.isPump ? '<span class="pp-tag">PUMP</span> ' + esc(r.pumpName) : esc(r.driverName || '-')) + '</td></tr>';
           }).join('') + '</tbody></table>';
       })
@@ -983,6 +999,7 @@
 
   function resetAfterSubmit_(){
     form.reset();
+    setParty_(false);
     clearBackDate_();
     document.getElementById('fullTankCheck').checked = false;
     document.getElementById('requestedLiters').type = 'number';
@@ -1057,16 +1074,45 @@
     backDateText.textContent = '📅 Back Date: ' + label + ' — saved with that date (goes to the Manager, or straight to the Diesel Team if Credit Diesel is ticked)';
     backDateBanner.style.display = 'flex';
     backDateBtn.classList.add('active');
-    submitBtn.textContent = 'Submit Back Date Request';
+    refreshModeLocks_();
   }
   function clearBackDate_(){
     backDateInput.value = '';
     backDateBanner.style.display = 'none';
     backDateBtn.classList.remove('active');
-    submitBtn.textContent = 'Submit Request';
+    refreshModeLocks_();
   }
   backDateInput.addEventListener('change', applyBackDate_);
   document.getElementById('backDateClear').addEventListener('click', clearBackDate_);
+
+  /* ---------- Party Diesel mode: diesel taken from a party ----------
+     Same form, but the request skips the Manager and goes straight to the Diesel
+     Team (ID PD###). The form turns green while this mode is on. It can't be
+     combined with Back Date or Credit, so those are locked while it's active. */
+  var partyMode = false;
+  var partyBtn = document.getElementById('partyBtn');
+  var partyBanner = document.getElementById('partyBanner');
+  var formCard = document.getElementById('reqForm').closest('.card');
+  function submitLabel_(){
+    return partyMode ? 'Submit Party Diesel' : (backDateInput.value ? 'Submit Back Date Request' : 'Submit Request');
+  }
+  function refreshModeLocks_(){
+    partyBtn.disabled = !partyMode && (!!backDateInput.value || creditCheckEl.checked);
+    backDateBtn.disabled = partyMode;
+    backDateInput.disabled = partyMode;
+    creditCheckEl.disabled = partyMode;
+    if (!submitBtn.disabled) submitBtn.textContent = submitLabel_();
+  }
+  function setParty_(on){
+    partyMode = !!on;
+    partyBtn.classList.toggle('active', partyMode);
+    partyBanner.style.display = partyMode ? 'flex' : 'none';
+    formCard.classList.toggle('party-mode', partyMode);
+    refreshModeLocks_();
+  }
+  partyBtn.addEventListener('click', function(){ setParty_(!partyMode); });
+  document.getElementById('partyClear').addEventListener('click', function(){ setParty_(false); });
+  creditCheckEl.addEventListener('change', refreshModeLocks_);
 
   /* ---------- Submit ---------- */
   form.addEventListener('submit', function(e){
@@ -1090,7 +1136,7 @@
     var isCreditDiesel = document.getElementById('creditDieselCheck').checked;
     var backDateVal = backDateInput.value;
     var payload = {
-      action: backDateVal ? 'createBackDate' : (isCreditDiesel ? 'createCredit' : 'create'),
+      action: partyMode ? 'createParty' : (backDateVal ? 'createBackDate' : (isCreditDiesel ? 'createCredit' : 'create')),
       vehicleNo: vehicleInput.value.trim(),
       driverId: driverIdInput.value.trim(),
       driverName: driverNameVal,
@@ -1122,7 +1168,9 @@
       if (res.ok) {
         localStorage.setItem('dieselCallerName', payload.requestedBy);
         myNameInput.value = payload.requestedBy;
-        if (backDateVal && isCreditDiesel) {
+        if (partyMode) {
+          showMsg('ok', '✅ Party Diesel submitted:<br><span class="req-id">' + res.requestId + '</span><div class="hint">No Manager approval needed — it goes straight to the Diesel Team (Party Diesel button).</div>');
+        } else if (backDateVal && isCreditDiesel) {
           showMsg('ok', '✅ Back Date Credit Diesel submitted:<br><span class="req-id">' + res.requestId + '</span><div class="hint">Saved with the date you picked. No Manager approval needed — it goes straight to the Diesel Team.</div>');
         } else if (backDateVal) {
           showMsg('ok', '✅ Back Date request submitted — give this Request ID to the Manager:<br><span class="req-id">' + res.requestId + '</span><div class="hint">Saved with the date you picked. The Manager will approve it, after which it shows to the Diesel Team.</div>');
@@ -1150,7 +1198,7 @@
     })
     .finally(function(){
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Submit Request';
+      submitBtn.textContent = submitLabel_();
     });
   });
 
@@ -1291,18 +1339,24 @@
     var creditUrl = isAll
       ? APPS_SCRIPT_URL + '?action=list&source=credit&limit=150'
       : APPS_SCRIPT_URL + '?action=list&source=credit&by=' + encodeURIComponent(name);
+    var partyUrl = isAll
+      ? APPS_SCRIPT_URL + '?action=list&source=party&limit=150'
+      : APPS_SCRIPT_URL + '?action=list&source=party&by=' + encodeURIComponent(name);
     myReqList.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:13px;">Loading...</div>';
     // "All Requests" gets the latest 150 from the server; "Search by Name" filters by name on the server
     Promise.all([
       fetch(url).then(function(r){ return r.json(); }),
-      fetch(creditUrl).then(function(r){ return r.json(); }).catch(function(){ return { ok: false, rows: [] }; })
+      fetch(creditUrl).then(function(r){ return r.json(); }).catch(function(){ return { ok: false, rows: [] }; }),
+      fetch(partyUrl).then(function(r){ return r.json(); }).catch(function(){ return { ok: false, rows: [] }; })
     ])
       .then(function(results){
-        var res = results[0], creditRes = results[1];
+        var res = results[0], creditRes = results[1], partyRes = results[2];
         if (myMode !== (isAll ? 'all' : 'name')) return; // mode changed, ignore stale response
         if (!isAll && myNameInput.value.trim() !== name) return; // stale
         if (!res.ok) { myReqList.innerHTML = '<div style="padding:10px;color:var(--red);font-size:13px;">Error: ' + esc(res.error) + '</div>'; return; }
-        myAllRows = res.rows.concat(creditRes.ok ? creditRes.rows.map(function(r){ r.isCredit = true; return r; }) : []);
+        myAllRows = res.rows
+          .concat(creditRes.ok ? creditRes.rows.map(function(r){ r.isCredit = true; return r; }) : [])
+          .concat(partyRes && partyRes.ok ? partyRes.rows.map(function(r){ r.isParty = true; return r; }) : []);
         renderMyStats();
         myStats.style.display = 'grid';
         myToolbar.style.display = 'flex';
@@ -1346,7 +1400,7 @@
     head.className = 'req-item-head';
     head.innerHTML =
       '<div>' +
-        '<div style="font-weight:800;color:var(--navy);font-size:13px;">' + esc(r.id) + (r.isCredit ? ' <span class="cr-tag">CR</span>' : '') + (myMode === 'all' ? ' <span style="font-weight:600;color:var(--orange-dark);">— ' + esc(r.requestedBy) + '</span>' : '') + '</div>' +
+        '<div style="font-weight:800;color:var(--navy);font-size:13px;">' + esc(r.id) + (r.isCredit ? ' <span class="cr-tag">CR</span>' : '') + (r.isParty ? ' <span class="pd-tag">PD</span>' : '') + (myMode === 'all' ? ' <span style="font-weight:600;color:var(--orange-dark);">— ' + esc(r.requestedBy) + '</span>' : '') + '</div>' +
         '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + esc(r.vehicleNo) + ' • ' + esc(r.requestedLiters) + ' L • ' + fmtDate(r.createdAt) + '</div>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">' +
