@@ -102,16 +102,22 @@
   .card.expanded .chevron{transform:rotate(180deg);}
   .odo-hist{background:#f3f4f6;border-left:4px solid #3b82f6;border-radius:8px;padding:9px 11px;font-size:12.5px;color:#374151;}
   .odo-hist .oh-title{font-weight:800;color:#1e3a8a;margin-bottom:6px;font-size:12px;}
+  .odo-hist{padding:11px 12px;}
   .odo-hist table{width:100%;border-collapse:collapse;}
-  .odo-hist th{text-align:left;font-size:10.5px;color:#6b7280;font-weight:700;padding:2px 6px 4px 0;}
-  .odo-hist td{padding:3px 6px 3px 0;border-top:1px solid #e5e7eb;}
+  .odo-hist th{text-align:left;font-size:10.5px;color:#6b7280;font-weight:700;padding:4px 8px 6px;white-space:nowrap;}
+  .odo-hist td{padding:8px 8px;border-top:1px solid #e5e7eb;vertical-align:top;line-height:1.35;}
+  .odo-hist td:first-child, .odo-hist th:first-child{padding-left:12px;}
+  .odo-hist .oh-d{font-weight:600;white-space:nowrap;}
+  .odo-hist .oh-t{font-size:11px;color:#6b7280;white-space:nowrap;}
+  .odo-hist .oh-num{font-weight:800;white-space:nowrap;}
+  .odo-hist .oh-pn{font-size:11px;font-weight:700;color:#0f766e;word-break:break-word;}
+  @media (max-width:480px){ .odo-hist{font-size:12px;padding:10px 8px;} .odo-hist td,.odo-hist th{padding-left:5px;padding-right:5px;} .odo-hist td:first-child,.odo-hist th:first-child{padding-left:10px;} }
   .odo-hist .oh-delta{margin-top:6px;font-weight:700;color:#1d4ed8;}
   .odo-hist .oh-delta.neg{color:#dc2626;}
   .odo-hist .oh-msg{color:#6b7280;}
   .odo-hist .oh-tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;}
   .odo-hist .oh-Pending{background:#fef3c7;color:#b45309;}
   .odo-hist .oh-Approved{background:#dcfce7;color:#15803d;}
-  .odo-hist .oh-pump{display:inline-block;background:#0f766e;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px;}
   .odo-hist tr.pump-row td{background:rgba(20,184,166,.20);}
   .odo-hist tr.pump-row td:first-child{box-shadow:inset 4px 0 0 #0f766e;}
   .card-body{max-height:0;opacity:0;overflow:hidden;padding:0 18px;
@@ -570,6 +576,14 @@
     rows.forEach(function(row){ listEl.appendChild(renderCard(row)); });
   }
 
+  // Two-line date cell: "22/10/2026" over "2:21 pm" (time omitted for pump-sheet fills)
+  function ohDate_(d, withTime){
+    var t = new Date(d);
+    if (!d || isNaN(t.getTime())) return '-';
+    var day = t.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    var time = withTime ? t.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true }) : '';
+    return '<div class="oh-d">' + day + '</div>' + (time ? '<div class="oh-t">' + time + '</div>' : '');
+  }
   // Date only ("28/10/2026") for pump-sheet fills, which carry no time of day
   function fmtDay_(d){
     if (!d) return '-';
@@ -635,10 +649,11 @@
       box.innerHTML = title +
         '<table><thead><tr><th>Created</th><th>Dispensed</th><th>Odometer (KM)</th><th>Liters</th></tr></thead><tbody>' +
         rows.map(function(r){
-          var disp = r.isPump ? fmtDay_(r.dispensedAt) + ' <span class="oh-pump">PUMP: ' + esc(r.pumpName) + '</span>'
-            : r.dispensedAt ? fmtDate(r.dispensedAt)
+          var disp = r.isPump
+            ? ohDate_(r.dispensedAt, false) + '<div class="oh-pn">⛽ ' + esc(r.pumpName) + '</div>'
+            : r.dispensedAt ? ohDate_(r.dispensedAt, true)
             : ((r.status === 'Pending' || r.status === 'Approved') ? '<span class="oh-tag oh-' + r.status + '">' + (r.status === 'Pending' ? '⏳ Pending' : '✔ Approved') + '</span>' : '-');
-          return '<tr' + (r.isPump ? ' class="pump-row"' : '') + '><td>' + (r.createdAt ? (r.isPump ? fmtDay_(r.createdAt) : fmtDate(r.createdAt)) : '-') + '</td><td>' + disp + '</td><td><b>' + esc(r.odometerKm || '-') + '</b></td><td>' + esc(r.actualLiters) + '</td></tr>';
+          return '<tr' + (r.isPump ? ' class="pump-row"' : '') + '><td>' + (r.createdAt ? ohDate_(r.createdAt, !r.isPump) : '-') + '</td><td>' + disp + '</td><td class="oh-num">' + esc(r.odometerKm || '-') + '</td><td class="oh-num">' + esc(r.actualLiters) + '</td></tr>';
         }).join('') + '</tbody></table>' + delta;
     }).catch(function(err){
       box.removeAttribute('data-loaded');
