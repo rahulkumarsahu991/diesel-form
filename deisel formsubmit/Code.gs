@@ -704,7 +704,7 @@ function readVehicleHistoryRows_(sheet, target, fuelType, includeOpen) {
     // createdAt + dispensedAt are both returned so the form can show both. A Back
     // Date request records a fill from an earlier day, so it is ordered by the
     // date the caller picked (Created At), not by when it was dispensed.
-    var isBackDate = /^BACKD/i.test(String(r[COL.ID - 1]));
+    var isBackDate = /^(BACKD|PDB)/i.test(String(r[COL.ID - 1]));
     var dispAt = open ? '' : (r[COL.DISP_AT - 1] || dispenseTimeFromReceipt_(r[COL.RECEIPT - 1]));
     rows.push({
       id: r[COL.ID - 1],
@@ -1012,7 +1012,7 @@ function nextPartySeq_(sheet) {
   return maxSeq + 1;
 }
 
-// Calling form's "Back Date" mode - a normal request (Manager -> Diesel Team) for a
+// Calling form's "Back Date" mode (IDs BACKD###; PDB### when combined with Party Diesel) - a normal request (Manager -> Diesel Team) for a
 // fill from an earlier date: same "Requests" tab and workflow, but the ID is
 // BACKD### and "Created At" carries the date the caller picked (with the current
 // time of day, so same-day entries still sort).
@@ -1045,7 +1045,8 @@ function createBackDateRequest_(body) {
     if (dup) return { ok: true, requestId: dup, duplicate: true };
     var sheet = getSheet_();
     var nextRow = sheet.getLastRow() + 1;
-    id = 'BACKD' + pad_(nextBackDateSeq_(sheet), 3);
+    // Back Date requests are BACKD###; a back-dated Party Diesel request is PDB###
+    id = isParty ? ('PDB' + pad_(nextBackDateSeq_(sheet, 'PDB'), 3)) : ('BACKD' + pad_(nextBackDateSeq_(sheet, 'BACKD'), 3));
 
     var row = [];
     row[COL.ID - 1] = id;
@@ -1103,13 +1104,14 @@ function createBackDateRequest_(body) {
   return { ok: true, requestId: id };
 }
 
-function nextBackDateSeq_(sheet) {
+function nextBackDateSeq_(sheet, prefix) {
+  var idRe = new RegExp('^' + prefix + '(\\d+)$');
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return 1;
   var ids = sheet.getRange(2, COL.ID, lastRow - 1, 1).getValues();
   var maxSeq = 0;
   for (var i = 0; i < ids.length; i++) {
-    var m = String(ids[i][0] || '').match(/^BACKD(\d+)$/);
+    var m = String(ids[i][0] || '').match(idRe);
     if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
   }
   return maxSeq + 1;
