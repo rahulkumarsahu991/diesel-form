@@ -69,6 +69,8 @@
   .ov-danger:active{background:rgba(220,38,38,.3) !important;}
   .ov-credit{background:rgba(124,58,237,.18) !important;border:1px solid rgba(124,58,237,.5) !important;color:#c4b5fd !important;}
   .ov-credit:active{background:rgba(124,58,237,.32) !important;}
+  .ov-party{background:rgba(5,150,105,.18) !important;border:1px solid rgba(5,150,105,.55) !important;color:#6ee7b7 !important;}
+  .ov-party:active{background:rgba(5,150,105,.32) !important;}
 
   .date-filter{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-bottom:16px;
     background:rgba(255,255,255,.85);border:1px solid var(--glass-border);border-radius:16px;padding:14px 16px;
@@ -233,6 +235,8 @@
   .credit-modal-head button:active{background:rgba(255,255,255,.32);}
   .credit-modal-body{padding:16px 20px 20px;overflow-y:auto;}
   .credit-modal .table-wrap{margin:0;}
+  .party-overlay .credit-modal{border-color:#059669;}
+  .party-overlay .credit-modal-head{background:linear-gradient(135deg,#059669,#047857);}
   .cd-modal{width:100%;max-width:380px;background:#fff;border:2px solid #dc2626;border-radius:18px;padding:26px 24px;
     text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.4);}
   .cd-icon{font-size:34px;margin-bottom:6px;}
@@ -334,6 +338,7 @@
       <button class="ov-filter" data-status="Dispensed">Dispensed</button>
       <button class="ov-filter" data-status="Rejected">Rejected</button>
       <button class="ov-credit" id="creditDieselBtn">💳 Credit Diesel</button>
+      <button class="ov-party" id="partyDieselBtn">🤝 Party Diesel</button>
       <button class="ov-danger" id="clearDataBtn">🗑️ Clear All Data</button>
       <button class="ov-refresh" id="ovRefresh">↻ Refresh</button>
     </div>
@@ -361,6 +366,25 @@
       </div>
     </div>
 
+  </div>
+
+  <div id="partyOverlay" class="credit-overlay party-overlay">
+    <div class="credit-modal">
+      <div class="credit-modal-head">
+        <span>🤝 Party Diesel — submitted by Calling Team, skips Manager, goes straight to Diesel Team (PD### / PDB### with Back Date)</span>
+        <button type="button" id="partyCloseBtn" title="Close">✕</button>
+      </div>
+      <div class="credit-modal-body">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Request ID</th><th>Date</th><th>Vehicle</th><th>Odometer (KM)</th><th>Driver</th><th>Liters</th><th>Requested By</th><th>Status</th><th>Remarks</th><th></th></tr>
+            </thead>
+            <tbody id="partyBody"><tr><td colspan="10" class="ov-loading">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="creditOverlay" class="credit-overlay">
@@ -645,6 +669,53 @@
   document.getElementById('creditCloseBtn').addEventListener('click', function(){ creditOverlay.classList.remove('show'); });
   creditOverlay.addEventListener('click', function(e){ if (e.target === creditOverlay) creditOverlay.classList.remove('show'); });
 
+  /* ---------- Party Diesel — its own window, like Credit Diesel ---------- */
+  var partyBody = document.getElementById('partyBody');
+  function loadPartyDiesel(){
+    if (!APPS_SCRIPT_URL) return;
+    fetch(APPS_SCRIPT_URL + '?action=list&source=party&limit=300')
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (!res.ok) { partyBody.innerHTML = '<tr><td colspan="10" class="ov-empty">Error: ' + esc(res.error) + '</td></tr>'; return; }
+        if (!res.rows.length) { partyBody.innerHTML = '<tr><td colspan="10" class="ov-empty">No party diesel entries yet.</td></tr>'; return; }
+        partyBody.innerHTML = res.rows.map(function(r){
+          var liters = r.status === 'Dispensed' ? r.actualLiters : r.requestedLiters;
+          return '<tr>' +
+            '<td data-label="Request ID" class="vsum"><b>' + esc(r.id) + '</b></td>' +
+            '<td data-label="Date" class="vsum">' + fmtDate(r.createdAt) + '</td>' +
+            '<td data-label="Vehicle" class="vsum">' + esc(r.vehicleNo) + '</td>' +
+            '<td data-label="Odometer (KM)">' + esc(r.odometerKm || '-') + '</td>' +
+            '<td data-label="Driver">' + esc(r.driverName || '-') + '</td>' +
+            '<td data-label="Liters">' + esc(liters) + '</td>' +
+            '<td data-label="Requested By">' + esc(r.requestedBy) + '</td>' +
+            '<td data-label="Status"><span class="status-chip status-' + esc(r.status) + '">' + esc(r.status) + '</span></td>' +
+            '<td data-label="Remarks">' + esc(r.callingRemarks || '-') + '</td>' +
+            '<td class="del-cell"><button type="button" class="row-del-btn" data-id="' + esc(r.id) + '" title="Delete this entry">✕</button></td>' +
+          '</tr>';
+        }).join('');
+      })
+      .catch(function(err){
+        partyBody.innerHTML = '<tr><td colspan="10" class="ov-empty">Network error: ' + esc(err.message) + '</td></tr>';
+      });
+  }
+  partyBody.addEventListener('click', function(e){
+    var delBtn = e.target.closest('.row-del-btn');
+    if (delBtn) { openDeleteModal_(delBtn.getAttribute('data-id')); return; }
+    var tr = e.target.closest('tr');
+    if (!tr || tr.parentNode !== partyBody || !tr.querySelector('td.vsum')) return;
+    var wasOpen = tr.classList.contains('expanded');
+    partyBody.querySelectorAll('tr.expanded').forEach(function(el){ el.classList.remove('expanded'); });
+    if (!wasOpen) tr.classList.add('expanded');
+  });
+
+  var partyOverlay = document.getElementById('partyOverlay');
+  document.getElementById('partyDieselBtn').addEventListener('click', function(){
+    partyOverlay.classList.add('show');
+    loadPartyDiesel();
+  });
+  document.getElementById('partyCloseBtn').addEventListener('click', function(){ partyOverlay.classList.remove('show'); });
+  partyOverlay.addEventListener('click', function(e){ if (e.target === partyOverlay) partyOverlay.classList.remove('show'); });
+
   function renderStats(){
     var visible = dateFilteredRequests_();
     var counts = { Pending: 0, Approved: 0, Rejected: 0, Dispensed: 0 };
@@ -744,6 +815,7 @@
       delOverlay.classList.remove('show');
       loadOverview();
       loadCreditDiesel();
+      loadPartyDiesel();
     })
     .catch(function(err){ delErr.textContent = '❌ Network error: ' + err.message; })
     .finally(function(){
