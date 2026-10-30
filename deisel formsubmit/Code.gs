@@ -1018,6 +1018,7 @@ function nextPartySeq_(sheet) {
 // time of day, so same-day entries still sort).
 function createBackDateRequest_(body) {
   var isCredit = !!body.credit;
+  var isParty = !!body.party && !isCredit; // Party Diesel + Back Date: skips the Manager like Credit does
   var early = dupRequestId_(body);
   if (early) return { ok: true, requestId: early, duplicate: true };
 
@@ -1061,11 +1062,11 @@ function createBackDateRequest_(body) {
     row[COL.REQ_BY - 1] = body.requestedBy || '';
     row[COL.CONTACT - 1] = body.contactNumber || '';
     row[COL.CALL_REMARKS - 1] = body.callingRemarks || '';
-    if (isCredit) {
-      // Credit + Back Date: skips the Manager like any Credit Diesel — straight in
-      // as "Approved" for the Diesel Team, who enters the liters when dispensing.
+    if (isCredit || isParty) {
+      // Credit / Party Diesel + Back Date: skips the Manager — straight in as "Approved"
+      // for the Diesel Team, who enters the liters when dispensing.
       row[COL.STATUS - 1] = 'Approved';
-      row[COL.MGR_NAME - 1] = CREDIT_MARKER;
+      row[COL.MGR_NAME - 1] = isParty ? PARTY_MARKER : CREDIT_MARKER;
       row[COL.APPROVED_LITERS - 1] = row[COL.REQ_LITERS - 1];
       row[COL.APPROVED_AT - 1] = new Date();
     } else {
@@ -1087,10 +1088,11 @@ function createBackDateRequest_(body) {
     lock.releaseLock();
   }
   var bdBody = (body.vehicleNo || 'Vehicle') + ' — back-dated request by ' + (body.requestedBy || 'Calling Team') + ' (' + id + ')';
-  if (isCredit) {
+  if (isCredit || isParty) {
+    var directLabel = isParty ? '🤝 Party Diesel' : '💳 Credit Diesel';
     sendPushBatch_([
-      { tokens: getDieselTokens_(), title: '💳 Credit Diesel (Back Date) — Ready to Dispense', body: bdBody, link: 'https://diesel-form.vercel.app/diesel-dispense.html', onInvalid: removeDieselToken_ },
-      { tokens: getAdminTokens_(), title: '💳 New Credit Diesel (Back Date)', body: bdBody, link: 'https://diesel-form.vercel.app/index.html', onInvalid: removeAdminToken_ }
+      { tokens: getDieselTokens_(), title: directLabel + ' (Back Date) — Ready to Dispense', body: bdBody, link: 'https://diesel-form.vercel.app/diesel-dispense.html', onInvalid: removeDieselToken_ },
+      { tokens: getAdminTokens_(), title: 'New ' + directLabel + ' (Back Date)', body: bdBody, link: 'https://diesel-form.vercel.app/index.html', onInvalid: removeAdminToken_ }
     ]);
   } else {
     sendPushBatch_([

@@ -365,7 +365,7 @@
           <button type="button" id="backDateClear" title="Remove back date">✕</button>
         </div>
         <div class="party-banner" id="partyBanner" style="display:none;">
-          <span>🤝 Party Diesel — goes straight to the Diesel Team (no Manager step)</span>
+          <span>🤝 Party Diesel — goes straight to the Diesel Team (no Manager step). You can also pick a Back Date.</span>
           <button type="button" id="partyClear" title="Back to a normal request">✕</button>
         </div>
         <div class="autocomplete-wrap">
@@ -1071,7 +1071,7 @@
     if (!v) { clearBackDate_(); return; }
     var p = v.split('-');
     var label = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    backDateText.textContent = '📅 Back Date: ' + label + ' — saved with that date (goes to the Manager, or straight to the Diesel Team if Credit Diesel is ticked)';
+    backDateText.textContent = '📅 Back Date: ' + label + ' — saved with that date (goes to the Manager, or straight to the Diesel Team if Credit Diesel or Party Diesel is on)';
     backDateBanner.style.display = 'flex';
     backDateBtn.classList.add('active');
     refreshModeLocks_();
@@ -1087,8 +1087,8 @@
 
   /* ---------- Party Diesel mode: diesel taken from a party ----------
      Same form, but the request skips the Manager and goes straight to the Diesel
-     Team (ID PD###). The form turns green while this mode is on. It can't be
-     combined with Back Date or Credit, so those are locked while it's active. */
+     Team (ID PD###). The form turns green while this mode is on. It can be
+     combined with Back Date (back-dated party request) but not with Credit. */
   var partyMode = false;
   var partyBtn = document.getElementById('partyBtn');
   var partyBanner = document.getElementById('partyBanner');
@@ -1097,9 +1097,9 @@
     return partyMode ? 'Submit Party Diesel' : (backDateInput.value ? 'Submit Back Date Request' : 'Submit Request');
   }
   function refreshModeLocks_(){
-    partyBtn.disabled = !partyMode && (!!backDateInput.value || creditCheckEl.checked);
-    backDateBtn.disabled = partyMode;
-    backDateInput.disabled = partyMode;
+    // Back Date works together with Party Diesel (a back-dated party request);
+    // only Credit and Party Diesel exclude each other.
+    partyBtn.disabled = !partyMode && creditCheckEl.checked;
     creditCheckEl.disabled = partyMode;
     if (!submitBtn.disabled) submitBtn.textContent = submitLabel_();
   }
@@ -1136,7 +1136,7 @@
     var isCreditDiesel = document.getElementById('creditDieselCheck').checked;
     var backDateVal = backDateInput.value;
     var payload = {
-      action: partyMode ? 'createParty' : (backDateVal ? 'createBackDate' : (isCreditDiesel ? 'createCredit' : 'create')),
+      action: backDateVal ? 'createBackDate' : (partyMode ? 'createParty' : (isCreditDiesel ? 'createCredit' : 'create')),
       vehicleNo: vehicleInput.value.trim(),
       driverId: driverIdInput.value.trim(),
       driverName: driverNameVal,
@@ -1150,6 +1150,7 @@
       callerPhoto: callerPhotoDataUrl,
       backDate: backDateVal,
       credit: isCreditDiesel,
+      party: partyMode,
       pumpLocation: isCreditDiesel ? document.getElementById('creditPump').value.trim() : '',
       clientId: Date.now().toString(36) + Math.random().toString(36).slice(2, 10)
     };
@@ -1168,7 +1169,9 @@
       if (res.ok) {
         localStorage.setItem('dieselCallerName', payload.requestedBy);
         myNameInput.value = payload.requestedBy;
-        if (partyMode) {
+        if (partyMode && backDateVal) {
+          showMsg('ok', '✅ Back Date Party Diesel submitted:<br><span class="req-id">' + res.requestId + '</span><div class="hint">Saved with the date you picked. No Manager approval needed — it goes straight to the Diesel Team (Party Diesel button).</div>');
+        } else if (partyMode) {
           showMsg('ok', '✅ Party Diesel submitted:<br><span class="req-id">' + res.requestId + '</span><div class="hint">No Manager approval needed — it goes straight to the Diesel Team (Party Diesel button).</div>');
         } else if (backDateVal && isCreditDiesel) {
           showMsg('ok', '✅ Back Date Credit Diesel submitted:<br><span class="req-id">' + res.requestId + '</span><div class="hint">Saved with the date you picked. No Manager approval needed — it goes straight to the Diesel Team.</div>');
