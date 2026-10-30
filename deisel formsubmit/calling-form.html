@@ -391,7 +391,7 @@
         </div>
 
         <label>Odometer (KM) <span class="req">*</span></label>
-        <input type="number" id="odometerKm" required min="0" step="any" inputmode="decimal" placeholder="e.g. 145230 or 145230.5">
+        <input type="text" id="odometerKm" data-km required inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" autocomplete="off" placeholder="e.g. 145230 or 145230.5">
 
         <label>Requested Liters <span class="req">*</span></label>
         <input type="number" id="requestedLiters" required min="1" step="0.1" placeholder="e.g. 100">
@@ -1509,6 +1509,16 @@
 /* Number fields change only by typing — scroll-wheel / arrow keys must not nudge the value (an empty field jumped to 0, 1, 2...) */
 document.addEventListener("wheel", function(e){ var t = e.target; if (t && t.type === "number" && document.activeElement === t) t.blur(); }, { passive: true });
 document.addEventListener("keydown", function(e){ var t = e.target; if (t && t.type === "number" && (e.key === "ArrowUp" || e.key === "ArrowDown")) e.preventDefault(); });
+/* Odometer (KM) is a text box with a decimal keypad so the "." key is always there (1123.3);
+   it only accepts digits and one point, and a comma is turned into a point. */
+document.addEventListener("input", function(e){
+  var t = e.target;
+  if (!t || !t.hasAttribute || !t.hasAttribute("data-km")) return;
+  var v = t.value.replace(/,/g, ".").replace(/[^0-9.]/g, "");
+  var i = v.indexOf(".");
+  if (i !== -1) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, "");
+  if (v !== t.value) t.value = v;
+});
 /* Cache the page + logo so the form opens fast on a weak network */
 if ("serviceWorker" in navigator) window.addEventListener("load", function(){ navigator.serviceWorker.register("/sw-forms.js", { scope: location.pathname }).catch(function(){}); });
 </script>
