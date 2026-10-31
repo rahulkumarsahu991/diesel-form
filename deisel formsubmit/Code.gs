@@ -969,6 +969,12 @@ function createPartyRequest_(body) {
     row[COL.ROUTE - 1] = body.routeTrip || '';
     row[COL.CURRENT_LOCATION - 1] = body.currentLocation || '';
     row[COL.ODOMETER - 1] = Number(body.odometerKm) || 0;
+    row[COL.PUMP - 1] = body.pumpLocation || '';
+    var pRate = Number(body.ratePerLiter) || 0;
+    if (pRate > 0) {
+      row[COL.RATE_PER_LITER - 1] = pRate;
+      if (typeof liters === 'number' && liters > 0) row[COL.AMOUNT - 1] = Math.round(pRate * liters * 100) / 100;
+    }
     row[COL.REQ_LITERS - 1] = liters;
     row[COL.REQ_BY - 1] = body.requestedBy || '';
     row[COL.CONTACT - 1] = body.contactNumber || '';
@@ -1057,7 +1063,7 @@ function createBackDateRequest_(body) {
     row[COL.ROUTE - 1] = body.routeTrip || '';
     row[COL.CURRENT_LOCATION - 1] = body.currentLocation || '';
     row[COL.ODOMETER - 1] = Number(body.odometerKm) || 0;
-    row[COL.PUMP - 1] = isCredit ? (body.pumpLocation || '') : '';
+    row[COL.PUMP - 1] = (isCredit || isParty) ? (body.pumpLocation || '') : '';
     row[COL.REQ_LITERS - 1] = (String(body.requestedLiters || '').trim().toLowerCase() === 'full')
       ? 'Full' : (Number(body.requestedLiters) || 0);
     row[COL.REQ_BY - 1] = body.requestedBy || '';
@@ -1070,6 +1076,12 @@ function createBackDateRequest_(body) {
       row[COL.MGR_NAME - 1] = isParty ? PARTY_MARKER : CREDIT_MARKER;
       row[COL.APPROVED_LITERS - 1] = row[COL.REQ_LITERS - 1];
       row[COL.APPROVED_AT - 1] = new Date();
+      var bdRate = Number(body.ratePerLiter) || 0;
+      if (isParty && bdRate > 0) {
+        row[COL.RATE_PER_LITER - 1] = bdRate;
+        var bdLit = row[COL.REQ_LITERS - 1];
+        if (typeof bdLit === 'number' && bdLit > 0) row[COL.AMOUNT - 1] = Math.round(bdRate * bdLit * 100) / 100;
+      }
     } else {
       row[COL.STATUS - 1] = 'Pending';
     }

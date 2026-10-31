@@ -395,6 +395,18 @@
 
         <label>Requested Liters <span class="req">*</span></label>
         <input type="number" id="requestedLiters" required min="1" step="0.1" placeholder="e.g. 100">
+        <div id="partyRateWrap" style="display:none;">
+          <div class="row2">
+            <div>
+              <label>Rate per Liter (₹)</label>
+              <input type="text" id="partyRate" data-km inputmode="decimal" autocomplete="off" placeholder="e.g. 92.50">
+            </div>
+            <div>
+              <label>Calculated Amount (₹)</label>
+              <input type="text" id="partyAmount" readonly placeholder="Liters × Rate">
+            </div>
+          </div>
+        </div>
         <label class="full-tank-check"><input type="checkbox" id="fullTankCheck"> ⛽ Full Tank (no specific quantity)</label>
         <label class="full-tank-check credit-check"><input type="checkbox" id="creditDieselCheck"> 💳 Credit Diesel (skips Manager — goes straight to Diesel Team)</label>
         <div id="creditPumpWrap" style="display:none;">
@@ -420,6 +432,13 @@
           <button type="button" id="useLocationBtn">📍 Use My Location</button>
         </div>
         <div class="driver-info" id="locationInfo"></div>
+        <div id="partyPumpWrap" style="display:none;">
+          <label>Pump Name <span class="hint" style="font-weight:400;">(optional)</span></label>
+          <div class="autocomplete-wrap">
+            <input type="text" id="partyPump" autocomplete="off" placeholder="Type to search pump...">
+            <div class="suggestions" id="partyPumpSuggestions"></div>
+          </div>
+        </div>
 
         <label>Requested By (your name) <span class="req">*</span></label>
         <input type="text" id="requestedBy" required placeholder="Your name">
@@ -631,6 +650,7 @@
   setupAutocomplete(vehicleInput, document.getElementById('vehicleSuggestions'), 'vehicles', function(v){ loadVehicleHistory(v); lookupDriverForVehicle(v); });
   setupAutocomplete(document.getElementById('routeTrip'), document.getElementById('routeSuggestions'), 'routes');
   setupAutocomplete(document.getElementById('creditPump'), document.getElementById('creditPumpSuggestions'), 'pumps');
+  setupAutocomplete(document.getElementById('partyPump'), document.getElementById('partyPumpSuggestions'), 'pumps');
 
   /* ---------- Optional request photo (camera or gallery) ----------
      Shrunk on-device (max 1024px, JPEG q0.6) before upload. createImageBitmap
@@ -1108,8 +1128,26 @@
     partyBtn.classList.toggle('active', partyMode);
     partyBanner.style.display = partyMode ? 'flex' : 'none';
     formCard.classList.toggle('party-mode', partyMode);
+    document.getElementById('partyRateWrap').style.display = partyMode ? 'block' : 'none';
+    document.getElementById('partyPumpWrap').style.display = partyMode ? 'block' : 'none';
+    if (!partyMode) {
+      document.getElementById('partyRate').value = '';
+      document.getElementById('partyAmount').value = '';
+      document.getElementById('partyPump').value = '';
+    } else {
+      updatePartyAmount_();
+    }
     refreshModeLocks_();
   }
+  // Calculated Amount = Requested Liters x Rate per Liter ("Full" has no number, so no amount)
+  function updatePartyAmount_(){
+    var liters = Number(document.getElementById('requestedLiters').value);
+    var rate = Number(document.getElementById('partyRate').value);
+    document.getElementById('partyAmount').value = (liters > 0 && rate > 0) ? (Math.round(liters * rate * 100) / 100).toFixed(2) : '';
+  }
+  document.getElementById('partyRate').addEventListener('input', updatePartyAmount_);
+  document.getElementById('requestedLiters').addEventListener('input', updatePartyAmount_);
+  document.getElementById('fullTankCheck').addEventListener('change', updatePartyAmount_);
   partyBtn.addEventListener('click', function(){ setParty_(!partyMode); });
   document.getElementById('partyClear').addEventListener('click', function(){ setParty_(false); });
   creditCheckEl.addEventListener('change', refreshModeLocks_);
@@ -1151,7 +1189,8 @@
       backDate: backDateVal,
       credit: isCreditDiesel,
       party: partyMode,
-      pumpLocation: isCreditDiesel ? document.getElementById('creditPump').value.trim() : '',
+      pumpLocation: partyMode ? document.getElementById('partyPump').value.trim() : (isCreditDiesel ? document.getElementById('creditPump').value.trim() : ''),
+      ratePerLiter: partyMode ? document.getElementById('partyRate').value.trim() : '',
       clientId: Date.now().toString(36) + Math.random().toString(36).slice(2, 10)
     };
 
