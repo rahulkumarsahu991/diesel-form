@@ -932,6 +932,32 @@ function createCreditRequest_(body) {
   return { ok: true, requestId: id };
 }
 
+// The original Created At is also written, as plain text, into the hidden OTP column
+// ("CT:2026-10-28T10:14:51", IST) of Party Diesel / Back Date rows. The date cells
+// (B/Q/T) have been seen going blank on the Requests sheet; this copy lets
+// backfillCreatedAt() restore the exact picked date afterwards.
+function originalStamp_(d) {
+  return 'CT:' + Utilities.formatDate(d, TIMEZONE, "yyyy-MM-dd'T'HH:mm:ss");
+}
+function parseOriginalStamp_(v) {
+  var m = String(v || '').match(/^CT:(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})$/);
+  return m ? Utilities.parseDate(m[1], TIMEZONE, "yyyy-MM-dd'T'HH:mm:ss") : null;
+}
+
+// After a row is written, make sure its date cells really hold their dates; if a
+// cell came back blank, write it again once and flush.
+function ensureDateCells_(sheet, rowIndex, createdAt, approvedAt) {
+  try {
+    var c = sheet.getRange(rowIndex, COL.CREATED_AT);
+    if (!c.getValue()) { c.setValue(createdAt); }
+    if (approvedAt) {
+      var q = sheet.getRange(rowIndex, COL.APPROVED_AT);
+      if (!q.getValue()) { q.setValue(approvedAt); }
+    }
+    SpreadsheetApp.flush();
+  } catch (e) { Logger.log('ensureDateCells_ failed: ' + e.message); }
+}
+
 // Calling form's "Party Diesel" mode - diesel taken from a party. A normal-shaped
 // request that skips the Manager: it is written into the Requests tab as
 // "Approved" (ID PD###) so the Diesel Team sees it right away under their
@@ -963,6 +989,7 @@ function createPartyRequest_(body) {
     var row = [];
     row[COL.ID - 1] = id;
     row[COL.CREATED_AT - 1] = now;
+    row[COL.OTP - 1] = originalStamp_(now);
     row[COL.VEHICLE - 1] = body.vehicleNo || '';
     row[COL.DRIVER_ID - 1] = body.driverId || '';
     row[COL.DRIVER - 1] = body.driverName || '';
@@ -994,6 +1021,7 @@ function createPartyRequest_(body) {
 
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush();
+    ensureDateCells_(sheet, nextRow, now, now);
     rememberClientId_(body, id);
   } finally {
     lock.releaseLock();
@@ -1057,6 +1085,7 @@ function createBackDateRequest_(body) {
     var row = [];
     row[COL.ID - 1] = id;
     row[COL.CREATED_AT - 1] = createdAt;
+    row[COL.OTP - 1] = originalStamp_(createdAt);
     row[COL.VEHICLE - 1] = body.vehicleNo || '';
     row[COL.DRIVER_ID - 1] = body.driverId || '';
     row[COL.DRIVER - 1] = body.driverName || '';
@@ -1096,6 +1125,7 @@ function createBackDateRequest_(body) {
 
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush();
+    ensureDateCells_(sheet, nextRow, createdAt, (isCredit || isParty) ? row[COL.APPROVED_AT - 1] : null);
     rememberClientId_(body, id);
   } finally {
     lock.releaseLock();
@@ -1922,19 +1952,40 @@ function backfillCreatedAt() {
   var sheet = getSheet_();
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return;
-  var created = sheet.getRange(2, COL.CREATED_AT, lastRow - 1, 1).getValues();
-  var photos = sheet.getRange(2, COL.CALLER_PHOTO, lastRow - 1, 1).getValues();
-  var fixed = 0, changed = false;
-  for (var i = 0; i < created.length; i++) {
-    if (created[i][0]) continue;
-    var m = String(photos[i][0] || '').match(/[?&]id=([^&]+)/);
-    if (!m) continue;
-    try {
-      created[i][0] = DriveApp.getFileById(m[1]).getDateCreated();
-      fixed++;
-      changed = true;
-    } catch (e) { /* file deleted or not accessible — leave blank */ }
+  var n = lastRow - 1;
+  var created = sheet.getRange(2, COL.CREATED_AT, n, 1).getValues();
+  var approved = sheet.getRange(2, COL.APPROVED_AT, n, 1).getValues();
+  var stamps = sheet.getRange(2, COL.OTP, n, 1).getValues();
+  var photos = sheet.getRange(2, COL.CALLER_PHOTO, n, 1).getValues();
+  var statuses = sheet.getRange(2, COL.STATUS, n, 1).getValues();
+  var mgrs = sheet.getRange(2, COL.MGR_NAME, n, 1).getValues();
+  var fixedCreated = 0, fixedApproved = 0, createdChanged = false, approvedChanged = false;
+  for (var i = 0; i < n; i++) {
+    if (!created[i][0]) {
+      // 1) exact copy saved at creation (Party Diesel / Back Date rows), 2) Caller Photo upload time
+      var d = parseOriginalStamp_(stamps[i][0]);
+      if (!d) {
+        var m = String(photos[i][0] || '').match(/[?&]id=([^&]+)/);
+        if (m) { try { d = DriveApp.getFileById(m[1]).getDateCreated(); } catch (e) { /* file gone */ } }
+      }
+      if (d) { created[i][0] = d; fixedCreated++; createdChanged = true; }
+    }
+    // Credit / Party rows skip the Manager, so their Approved At is the creation time
+    var direct = mgrs[i][0] === CREDIT_MARKER || mgrs[i][0] === PARTY_MARKER;
+    var st = String(statuses[i][0]);
+    if (direct && (st === 'Approved' || st === 'Dispensed') && !approved[i][0] && created[i][0]) {
+      approved[i][0] = created[i][0]; fixedApproved++; approvedChanged = true;
+    }
   }
-  if (changed) sheet.getRange(2, COL.CREATED_AT, lastRow - 1, 1).setValues(created);
-  Logger.log('Backfilled ' + fixed + ' Created At cells');
+  if (createdChanged) sheet.getRange(2, COL.CREATED_AT, n, 1).setValues(created);
+  if (approvedChanged) sheet.getRange(2, COL.APPROVED_AT, n, 1).setValues(approved);
+  Logger.log('Backfilled ' + fixedCreated + ' Created At and ' + fixedApproved + ' Approved At cells');
+}
+
+// One click in the Apps Script editor: restores every blank Created / Approved /
+// Dispensed date it can (Created from the saved copy or photo time, Dispensed from
+// the receipt number). Only blank cells are written.
+function backfillAllDates() {
+  backfillCreatedAt();
+  backfillDispensedAt();
 }
