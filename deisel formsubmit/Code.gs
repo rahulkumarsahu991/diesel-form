@@ -1664,12 +1664,15 @@ function buildTodayAttendanceMap_() {
   }
   if (!sheet) return map; // today's date column isn't in any candidate tab
 
-  var data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  // Only the driver columns (A..D) and today's one date column are read, not the
+  // whole 80+ column month grid — that was most of the first-call wait.
+  var data = sheet.getRange(2, 1, lastRow - 1, ATTENDANCE_MOBILE_COL).getValues();
+  var todayCol = sheet.getRange(2, vehicleCol + 1, lastRow - 1, 1).getValues();
   for (var i = 0; i < data.length; i++) {
     var row = data[i];
     var driverId = String(row[ATTENDANCE_ID_COL - 1] || '').trim();
     if (!driverId) continue;
-    var vehicleForToday = String(row[vehicleCol] || '').trim().toUpperCase();
+    var vehicleForToday = String(todayCol[i][0] || '').trim().toUpperCase();
     if (!vehicleForToday) continue;
     // Match on vehicle assignment alone — present or absent, whichever
     // driver is assigned to this vehicle today per the sheet still counts.
