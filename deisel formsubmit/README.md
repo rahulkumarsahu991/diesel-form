@@ -12,7 +12,7 @@ Har page ka apna alag login hai:
 |---|---|---|---|
 | `index.html` | Director / Developer (overview + sab links) | `Admin` | `Daman@11` |
 | `calling-form.html` | Calling Team | `Caller1` | `Calling@11` |
-| `manager-approval.html` | Manager | `Manager2` | `Manager@11` |
+| `manager-approval.html` | Manager | `Manager2` | `M@2325` |
 | `diesel-dispense.html` | Diesel Team | `Diesel3` | `Diesel@11` |
 
 Login browser tab band hone tak yaad rehta hai. Password badalna ho to us page ki HTML file kholo, `<script>` ke shuru me `USER` / `PASS` wali line edit kar do.
