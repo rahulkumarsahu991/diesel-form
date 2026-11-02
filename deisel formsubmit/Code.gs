@@ -286,6 +286,18 @@ var ATTENDANCE_SHEET_ID = '1wgG2K9phHMQPvIskvXF1OBHxNHFk8pegrKCi0hvuF6U';
 function attendanceSheetName_() {
   return 'Attendance ' + Utilities.formatDate(new Date(), TIMEZONE, 'MMM');
 }
+
+// This month's tab first, then last month's: a new month's tab is often created late
+// (e.g. there is no "Attendance Nov" yet on 2 Nov), while the previous month's tab
+// already carries the first days of the next month as extra date columns.
+function attendanceSheetCandidates_(ss) {
+  var now = new Date();
+  var prev = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+  var names = [attendanceSheetName_(), 'Attendance ' + Utilities.formatDate(prev, TIMEZONE, 'MMM')];
+  var sheets = [];
+  names.forEach(function(nm) { var s = findSheetLoose_(ss, nm); if (s) sheets.push(s); });
+  return sheets;
+}
 var ATTENDANCE_ID_COL = 2;     // Column B
 var ATTENDANCE_NAME_COL = 3;   // Column C
 var ATTENDANCE_MOBILE_COL = 4; // Column D
@@ -1541,20 +1553,22 @@ function lookupDriver_(id) {
 
 function lookupDriverInAttendance_(targetLower) {
   var ss = SpreadsheetApp.openById(ATTENDANCE_SHEET_ID);
-  var sheet = findSheetLoose_(ss, attendanceSheetName_());
-  if (!sheet) return null;
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return null;
-  var data = sheet.getRange(2, 1, lastRow - 1, ATTENDANCE_MOBILE_COL).getValues();
-  for (var i = 0; i < data.length; i++) {
-    var rowId = String(data[i][ATTENDANCE_ID_COL - 1] || '').trim().toLowerCase();
-    if (rowId === targetLower) {
-      return {
-        ok: true,
-        driverId: data[i][ATTENDANCE_ID_COL - 1],
-        name: String(data[i][ATTENDANCE_NAME_COL - 1] || '').trim(),
-        mobile: String(data[i][ATTENDANCE_MOBILE_COL - 1] || '').trim()
-      };
+  var sheets = attendanceSheetCandidates_(ss);
+  for (var s = 0; s < sheets.length; s++) {
+    var sheet = sheets[s];
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) continue;
+    var data = sheet.getRange(2, 1, lastRow - 1, ATTENDANCE_MOBILE_COL).getValues();
+    for (var i = 0; i < data.length; i++) {
+      var rowId = String(data[i][ATTENDANCE_ID_COL - 1] || '').trim().toLowerCase();
+      if (rowId === targetLower) {
+        return {
+          ok: true,
+          driverId: data[i][ATTENDANCE_ID_COL - 1],
+          name: String(data[i][ATTENDANCE_NAME_COL - 1] || '').trim(),
+          mobile: String(data[i][ATTENDANCE_MOBILE_COL - 1] || '').trim()
+        };
+      }
     }
   }
   return null;
@@ -1571,14 +1585,14 @@ function lookupDriverByVehicleToday_(vehicle) {
 
   var cache = CacheService.getScriptCache();
   var todayKey = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
-  var cacheKey = 'attmap2_' + todayKey;
+  var cacheKey = 'attmap3_' + todayKey;
   var map;
   var cached = cache.get(cacheKey);
   if (cached) {
     map = JSON.parse(cached);
   } else {
     map = buildTodayAttendanceMap_();
-    try { cache.put(cacheKey, JSON.stringify(map), 600); } catch (e) {} // 10 min
+    try { cache.put(cacheKey, JSON.stringify(map), Object.keys(map).length ? 600 : 60); } catch (e) {} // 10 min (1 min if nothing was found, so a late-created tab is picked up quickly)
   }
 
   // Route/Trip + Current Location from the Calling Sheet ride along in the same
@@ -1633,22 +1647,22 @@ function buildTripInfoMap_() {
 function buildTodayAttendanceMap_() {
   var map = {};
   var ss = SpreadsheetApp.openById(ATTENDANCE_SHEET_ID);
-  var sheet = findSheetLoose_(ss, attendanceSheetName_());
-  if (!sheet) return map;
-
-  var lastCol = sheet.getLastColumn();
-  var lastRow = sheet.getLastRow();
-  if (lastCol < 1 || lastRow < 2) return map;
-
   var todayStr = Utilities.formatDate(new Date(), TIMEZONE, 'dd/MM/yyyy');
-  var header = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  var vehicleCol = -1;
-  for (var c = 0; c < header.length; c++) {
-    var h = header[c];
-    var hStr = (h instanceof Date) ? Utilities.formatDate(h, TIMEZONE, 'dd/MM/yyyy') : String(h || '').trim();
-    if (hStr === todayStr) { vehicleCol = c; break; }
+  // First tab (this month, then last month) that actually has today's date column
+  var sheet = null, lastCol = 0, lastRow = 0, vehicleCol = -1;
+  var candidates = attendanceSheetCandidates_(ss);
+  for (var s = 0; s < candidates.length && vehicleCol === -1; s++) {
+    var cand = candidates[s];
+    var cLastCol = cand.getLastColumn(), cLastRow = cand.getLastRow();
+    if (cLastCol < 1 || cLastRow < 2) continue;
+    var header = cand.getRange(1, 1, 1, cLastCol).getValues()[0];
+    for (var c = 0; c < header.length; c++) {
+      var h = header[c];
+      var hStr = (h instanceof Date) ? Utilities.formatDate(h, TIMEZONE, 'dd/MM/yyyy') : String(h || '').trim();
+      if (hStr === todayStr) { vehicleCol = c; sheet = cand; lastCol = cLastCol; lastRow = cLastRow; break; }
+    }
   }
-  if (vehicleCol === -1) return map; // today's date column isn't in this sheet (e.g. wrong month's tab)
+  if (!sheet) return map; // today's date column isn't in any candidate tab
 
   var data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
   for (var i = 0; i < data.length; i++) {
