@@ -1051,15 +1051,15 @@
     if (!(cur > 0)) return '';
     var ref = lastOdoReference_();
     if (ref && cur < ref.km) {
-      return '⚠️ Last refueling odometer was ' + ref.km + ' KM' + (ref.when ? ' (' + fmtDay_(ref.when) + ')' : '') +
-             ' — you entered ' + cur + ', which is lower. Please check the reading.';
+      return '⚠️ पिछली रिफ्यूलिंग का ओडोमीटर ' + ref.km + ' KM था' + (ref.when ? ' (' + fmtDay_(ref.when) + ')' : '') +
+             ' — आपने ' + cur + ' डाला है, जो उससे कम है। कृपया रीडिंग जाँच लें।';
     }
     return '';
   }
   function checkOdometer_(){
     var msg = odometerProblem_();
     odoInputEl.classList.toggle('odo-bad', !!msg);
-    odoInputEl.setCustomValidity(msg ? 'Odometer is lower than the last refueling reading.' : '');
+    odoInputEl.setCustomValidity(msg ? 'ओडोमीटर पिछली रिफ्यूलिंग की रीडिंग से कम है।' : '');
     odoWarnEl.style.display = msg ? 'block' : 'none';
     odoWarnEl.textContent = msg;
   }
