@@ -369,6 +369,7 @@ function doPost(e) {
     if (action === 'dispense') return jsonOut_(dispenseRequest_(body));
     if (action === 'clearAllData') return jsonOut_(clearAllData_(body));
     if (action === 'deleteRequest') return jsonOut_(deleteRequestRow_(body));
+    if (action === 'repairDates') return jsonOut_(repairDatesWeb_());
     if (action === 'registerManagerToken') return jsonOut_(registerManagerToken_(body));
     if (action === 'registerDieselToken') return jsonOut_(registerDieselToken_(body));
     if (action === 'registerAdminToken') return jsonOut_(registerAdminToken_(body));
@@ -2104,6 +2105,21 @@ function backfillAllDates() {
   });
   Logger.log('backfillAllDates restored ' + total + ' date cells');
   return total;
+}
+
+// Admin panel's "Fill Dates" button: same repair as backfillAllDates (only blank date
+// cells are written). Throttled to one run per 30 seconds so repeated clicks don't pile up.
+function repairDatesWeb_() {
+  var cache = CacheService.getScriptCache();
+  if (cache.get('repair_running')) return { ok: false, error: 'A repair was just run — wait a few seconds and try again.' };
+  try { cache.put('repair_running', '1', 30); } catch (e) {}
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    return { ok: true, restored: backfillAllDates() };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // Timer entry point: same repair, but skipped if a request is being written right now.
