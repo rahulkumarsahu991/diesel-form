@@ -100,6 +100,8 @@
   .card.party-mode{background:linear-gradient(160deg,rgba(209,250,229,.92),rgba(167,243,208,.82));border:2px solid #059669;box-shadow:0 0 0 4px rgba(16,185,129,.18);}
   .card.party-mode #submitBtn{background:linear-gradient(135deg,#059669,#047857);}
   .pd-tag{display:inline-block;background:#059669;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:5px;letter-spacing:.3px;vertical-align:middle;}
+  input.odo-bad{border:2px solid #dc2626 !important;background:#fee2e2 !important;color:#991b1b !important;}
+  .odo-warn{margin-top:6px;padding:8px 11px;border-radius:8px;background:#fee2e2;border:1px solid #dc2626;color:#991b1b;font-size:12.5px;font-weight:700;line-height:1.4;}
   .history-box tr.pump-row td{background:rgba(20,184,166,.20);}
   .history-box tr.pump-row td:first-child{box-shadow:inset 4px 0 0 #0f766e;}
 
@@ -392,6 +394,7 @@
 
         <label>Odometer (KM) <span class="req">*</span></label>
         <input type="text" id="odometerKm" data-km required inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" autocomplete="off" placeholder="e.g. 145230 or 145230.5">
+        <div class="odo-warn" id="odoWarn" style="display:none;"></div>
 
         <label>Requested Liters <span class="req">*</span></label>
         <input type="number" id="requestedLiters" required min="1" step="0.1" placeholder="e.g. 100">
@@ -770,7 +773,7 @@
   vehicleInput.addEventListener('input', function(){
     clearTimeout(vehicleHistoryTimer);
     var v = vehicleInput.value.trim();
-    if (!v) { vehicleHistoryBox.style.display = 'none'; return; }
+    if (!v) { vehicleHistoryBox.style.display = 'none'; odoRefRows = []; checkOdometer_(); return; }
     vehicleHistoryTimer = setTimeout(function(){ loadVehicleHistory(v); lookupDriverForVehicle(v); }, 500);
   });
 
@@ -822,9 +825,10 @@
   }
 
   function loadVehicleHistory(vehicle){
-    if (!vehicle || !APPS_SCRIPT_URL) { vehicleHistoryBox.style.display = 'none'; return; }
+    if (!vehicle || !APPS_SCRIPT_URL) { vehicleHistoryBox.style.display = 'none'; odoRefRows = []; checkOdometer_(); return; }
     vehicleHistoryBox.style.display = 'block';
     vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 ' + esc(vehicle) + ' — Last Refueling</div><div class="h-msg">Loading...</div>';
+    odoRefRows = []; checkOdometer_();
     // Filtering/trimming happens on the server — the full request list is never downloaded
     // Two calls in parallel: the app's own history, plus fills made at a pump
     // outside the app (pump sheet, no OTP). They are merged by date, newest first;
@@ -837,6 +841,8 @@
         var res = results[0], pumpRes = results[1];
         if (vehicleInput.value.trim() !== vehicle) return; // stale response, ignore
         if (!res.ok) { vehicleHistoryBox.innerHTML = '<div class="h-title">🕓 Last Refueling</div><div class="h-msg">Error: ' + esc(res.error) + '</div>'; return; }
+        odoRefRows = res.rows || []; // this app's own requests only (pump-sheet KM is typed by hand, so it is not used to block)
+        checkOdometer_();
         // A fill that has its own form in the app must show once: drop pump-sheet rows
         // that match an app request (same day window + same liters).
         var pumpRows = (pumpRes && pumpRes.ok ? pumpRes.rows : []).filter(function(p){ return !isDupPumpRow_(p, res.rows); });
@@ -1017,8 +1023,51 @@
       });
   }
 
+  /* ---------- Odometer sanity check ----------
+     A new reading can never be LOWER than the vehicle's last refueling reading. When it is,
+     the box turns red with the last reading shown and the form cannot be submitted. For a
+     Back Date request only readings up to the picked date are considered. */
+  var odoRefRows = [];
+  var odoInputEl = document.getElementById('odometerKm');
+  var odoWarnEl = document.getElementById('odoWarn');
+  function lastOdoReference_(){
+    var cutoffDay = backDateInput && backDateInput.value ? backDateInput.value : '';
+    for (var i = 0; i < odoRefRows.length; i++) {
+      var r = odoRefRows[i];
+      var km = Number(r.odometerKm);
+      if (!(km > 0)) continue;
+      if (cutoffDay) {
+        var when = new Date(r.sortAt || r.createdAt || r.dispensedAt);
+        if (isNaN(when.getTime())) continue;
+        var day = new Date(when.getTime() + 19800000).toISOString().slice(0, 10); // IST calendar day
+        if (day > cutoffDay) continue;
+      }
+      return { km: km, when: r.createdAt || r.dispensedAt || r.sortAt };
+    }
+    return null;
+  }
+  function odometerProblem_(){
+    var cur = parseFloat(String(odoInputEl.value).replace(',', '.'));
+    if (!(cur > 0)) return '';
+    var ref = lastOdoReference_();
+    if (ref && cur < ref.km) {
+      return '⚠️ Last refueling odometer was ' + ref.km + ' KM' + (ref.when ? ' (' + fmtDay_(ref.when) + ')' : '') +
+             ' — you entered ' + cur + ', which is lower. Please check the reading.';
+    }
+    return '';
+  }
+  function checkOdometer_(){
+    var msg = odometerProblem_();
+    odoInputEl.classList.toggle('odo-bad', !!msg);
+    odoInputEl.setCustomValidity(msg ? 'Odometer is lower than the last refueling reading.' : '');
+    odoWarnEl.style.display = msg ? 'block' : 'none';
+    odoWarnEl.textContent = msg;
+  }
+  odoInputEl.addEventListener('input', checkOdometer_);
+
   function resetAfterSubmit_(){
     form.reset();
+    odoRefRows = []; checkOdometer_();
     setParty_(false);
     clearBackDate_();
     document.getElementById('fullTankCheck').checked = false;
@@ -1087,6 +1136,7 @@
     try { if (backDateInput.showPicker) backDateInput.showPicker(); } catch(e) { /* native tap still opens it */ }
   });
   function applyBackDate_(){
+    setTimeout(checkOdometer_, 0);
     var v = backDateInput.value;
     if (!v) { clearBackDate_(); return; }
     var p = v.split('-');
@@ -1097,6 +1147,7 @@
     refreshModeLocks_();
   }
   function clearBackDate_(){
+    setTimeout(checkOdometer_, 0);
     backDateInput.value = '';
     backDateBanner.style.display = 'none';
     backDateBtn.classList.remove('active');
@@ -1164,6 +1215,13 @@
     if (!driverNameVal) {
       showMsg('err', '❌ Enter the Driver Name (or a valid Driver ID to auto-fill it).');
       driverNameAuto.focus();
+      return;
+    }
+    var odoMsg = odometerProblem_();
+    if (odoMsg) {
+      checkOdometer_();
+      showMsg('err', '❌ ' + odoMsg);
+      odoInputEl.focus();
       return;
     }
     if (callerPhotoBusy) {
