@@ -490,13 +490,19 @@ function newestFirstByCreated_(a, b) {
 }
 
 function rowToObj_(row) {
+  // Blank date cells are filled in from the saved copy (hidden OTP column) / receipt number,
+  // so the date still shows even before the sheet itself is repaired.
+  var stamp = row[COL.OTP - 1];
+  var createdAt = row[COL.CREATED_AT - 1] || stampGet_(stamp, 'CT') || '';
+  var status = row[COL.STATUS - 1];
+  var approvedAt = row[COL.APPROVED_AT - 1] || stampGet_(stamp, 'AT') || '';
   var dispensedAt = row[COL.DISP_AT - 1];
-  if (!dispensedAt && row[COL.STATUS - 1] === 'Dispensed') {
-    dispensedAt = dispenseTimeFromReceipt_(row[COL.RECEIPT - 1]);
+  if (!dispensedAt && status === 'Dispensed') {
+    dispensedAt = stampGet_(stamp, 'DT') || dispenseTimeFromReceipt_(row[COL.RECEIPT - 1]);
   }
   return {
     id: row[COL.ID - 1],
-    createdAt: row[COL.CREATED_AT - 1],
+    createdAt: createdAt,
     vehicleNo: row[COL.VEHICLE - 1],
     driverId: row[COL.DRIVER_ID - 1],
     driverName: row[COL.DRIVER - 1],
@@ -512,7 +518,7 @@ function rowToObj_(row) {
     managerName: row[COL.MGR_NAME - 1],
     approvedLiters: row[COL.APPROVED_LITERS - 1],
     managerRemarks: row[COL.MGR_REMARKS - 1],
-    approvedAt: row[COL.APPROVED_AT - 1],
+    approvedAt: approvedAt,
     dispensedBy: row[COL.DISP_BY - 1],
     actualLiters: row[COL.ACTUAL_LITERS - 1],
     dispensedAt: dispensedAt,
@@ -717,13 +723,14 @@ function readVehicleHistoryRows_(sheet, target, fuelType, includeOpen) {
     // Date request records a fill from an earlier day, so it is ordered by the
     // date the caller picked (Created At), not by when it was dispensed.
     var isBackDate = /^(BACKD|PDB)/i.test(String(r[COL.ID - 1]));
-    var dispAt = open ? '' : (r[COL.DISP_AT - 1] || dispenseTimeFromReceipt_(r[COL.RECEIPT - 1]));
+    var createdHealed = r[COL.CREATED_AT - 1] || stampGet_(r[COL.OTP - 1], 'CT') || '';
+    var dispAt = open ? '' : (r[COL.DISP_AT - 1] || stampGet_(r[COL.OTP - 1], 'DT') || dispenseTimeFromReceipt_(r[COL.RECEIPT - 1]));
     rows.push({
       id: r[COL.ID - 1],
       status: st,
-      createdAt: r[COL.CREATED_AT - 1],
+      createdAt: createdHealed,
       dispensedAt: dispAt,
-      sortAt: (isBackDate || open) ? r[COL.CREATED_AT - 1] : dispAt,
+      sortAt: (isBackDate || open) ? createdHealed : dispAt,
       actualLiters: open ? (r[COL.APPROVED_LITERS - 1] || r[COL.REQ_LITERS - 1]) : r[COL.ACTUAL_LITERS - 1],
       odometerKm: r[COL.ODOMETER - 1],
       driverName: r[COL.DRIVER - 1],
@@ -839,8 +846,10 @@ function createRequest_(body) {
       if (!hdrCell.getValue()) hdrCell.setValue('Caller Photo');
     }
 
+    stampRowDates_(row);
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush(); // make sure this write is visible before the lock releases
+    ensureDateCells_(sheet, nextRow, now, null);
     rememberClientId_(body, id);
   } finally {
     lock.releaseLock();
@@ -930,8 +939,10 @@ function createCreditRequest_(body) {
       if (!hdrCell.getValue()) hdrCell.setValue('Caller Photo');
     }
 
+    stampRowDates_(row);
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush();
+    ensureDateCells_(sheet, nextRow, now, now);
     rememberClientId_(body, id);
   } finally {
     lock.releaseLock();
@@ -944,16 +955,47 @@ function createCreditRequest_(body) {
   return { ok: true, requestId: id };
 }
 
-// The original Created At is also written, as plain text, into the hidden OTP column
-// ("CT:2026-10-28T10:14:51", IST) of Party Diesel / Back Date rows. The date cells
-// (B/Q/T) have been seen going blank on the Requests sheet; this copy lets
-// backfillCreatedAt() restore the exact picked date afterwards.
-function originalStamp_(d) {
-  return 'CT:' + Utilities.formatDate(d, TIMEZONE, "yyyy-MM-dd'T'HH:mm:ss");
+// The date cells (B Created / Q Approved / T Dispensed) have been seen going blank on the
+// sheets. Every creation / approval / dispense therefore ALSO writes its time, as plain
+// text, into the hidden OTP column: "CT:2026-10-28T10:14:51;AT:...;DT:..." (IST). The
+// copy is used to (1) show the date even if the cell is blank (rowToObj_), (2) restore the
+// cell automatically (autoRepairDates / onSheetEditGuard) and by hand (backfillAllDates).
+var STAMP_FMT_ = "yyyy-MM-dd'T'HH:mm:ss";
+function stampParts_(s) {
+  var parts = {};
+  String(s || '').split(';').forEach(function(p) {
+    var m = p.match(/^(CT|AT|DT):(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})$/);
+    if (m) parts[m[1]] = m[2];
+  });
+  return parts;
 }
-function parseOriginalStamp_(v) {
-  var m = String(v || '').match(/^CT:(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})$/);
-  return m ? Utilities.parseDate(m[1], TIMEZONE, "yyyy-MM-dd'T'HH:mm:ss") : null;
+function stampSet_(existing, key, d) {
+  var parts = stampParts_(existing);
+  if (d instanceof Date && !isNaN(d.getTime())) parts[key] = Utilities.formatDate(d, TIMEZONE, STAMP_FMT_);
+  return ['CT', 'AT', 'DT'].filter(function(k) { return parts[k]; }).map(function(k) { return k + ':' + parts[k]; }).join(';');
+}
+function stampGet_(s, key) {
+  var v = stampParts_(s)[key];
+  return v ? Utilities.parseDate(v, TIMEZONE, STAMP_FMT_) : null;
+}
+function originalStamp_(d) { return stampSet_('', 'CT', d); }
+function parseOriginalStamp_(v) { return stampGet_(v, 'CT'); }
+
+// Called right before a new row is written: records Created / Approved in the stamp.
+function stampRowDates_(row) {
+  var s = '';
+  if (row[COL.CREATED_AT - 1] instanceof Date) s = stampSet_(s, 'CT', row[COL.CREATED_AT - 1]);
+  if (row[COL.APPROVED_AT - 1] instanceof Date) s = stampSet_(s, 'AT', row[COL.APPROVED_AT - 1]);
+  row[COL.OTP - 1] = s;
+}
+
+// After a write, make sure one date cell really holds its date; if it came back
+// blank, write it again once.
+function ensureCell_(sheet, rowIndex, col, date) {
+  try {
+    var cell = sheet.getRange(rowIndex, col);
+    if (!cell.getValue()) { cell.setValue(date); SpreadsheetApp.flush(); }
+  } catch (e) { Logger.log('ensureCell_ failed: ' + e.message); }
 }
 
 // After a row is written, make sure its date cells really hold their dates; if a
@@ -1031,6 +1073,7 @@ function createPartyRequest_(body) {
       if (!hdrCell.getValue()) hdrCell.setValue('Caller Photo');
     }
 
+    stampRowDates_(row);
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush();
     ensureDateCells_(sheet, nextRow, now, now);
@@ -1135,6 +1178,7 @@ function createBackDateRequest_(body) {
       if (!hdrCell.getValue()) hdrCell.setValue('Caller Photo');
     }
 
+    stampRowDates_(row);
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush();
     ensureDateCells_(sheet, nextRow, createdAt, (isCredit || isParty) ? row[COL.APPROVED_AT - 1] : null);
@@ -1277,8 +1321,10 @@ function createOfficeRequest_(body) {
     // then returns the chip's display name (e.g. "OT001_before.png")
     // instead of the URL, breaking every reader of this column.
     sheet.getRange(nextRow, COL.BEFORE_PHOTO, 1, 2).setNumberFormat('@');
+    stampRowDates_(row);
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush();
+    ensureDateCells_(sheet, nextRow, now, now);
     rememberClientId_(body, id);
     return { ok: true, requestId: id };
   } finally {
@@ -1316,10 +1362,12 @@ function approveRequest_(body) {
     // Column P (OTP) is left blank on purpose — no longer auto-generated,
     // filled in manually if ever needed.
     values[COL.APPROVED_AT - 1] = new Date();
+    values[COL.OTP - 1] = stampSet_(values[COL.OTP - 1], 'AT', values[COL.APPROVED_AT - 1]);
 
     // One write for the whole row instead of up to 9 separate setValue calls —
     // each Range.setValue() is its own round trip into the Sheets service.
     sheet.getRange(found.rowIndex, 1, 1, HEADERS.length).setValues([values]);
+    ensureCell_(sheet, found.rowIndex, COL.APPROVED_AT, values[COL.APPROVED_AT - 1]);
 
     vehicleNo = values[COL.VEHICLE - 1];
     approvedLiters = Number(body.approvedLiters) || 0;
@@ -1417,12 +1465,14 @@ function dispenseRequest_(body) {
     values[COL.DISP_BY - 1] = body.dispensedBy || '';
     values[COL.ACTUAL_LITERS - 1] = actualLiters;
     values[COL.DISP_AT - 1] = new Date();
+    values[COL.OTP - 1] = stampSet_(values[COL.OTP - 1], 'DT', values[COL.DISP_AT - 1]);
     values[COL.RECEIPT - 1] = receiptNo;
     values[COL.RATE_PER_LITER - 1] = ratePerLiter;
     values[COL.AMOUNT - 1] = amount;
     if (body.pumpLocation) values[COL.PUMP - 1] = body.pumpLocation;
 
     sheet.getRange(found.rowIndex, 1, 1, HEADERS.length).setValues([values]);
+    ensureCell_(sheet, found.rowIndex, COL.DISP_AT, values[COL.DISP_AT - 1]);
 
     var receipt = rowToObj_(values);
     return { ok: true, receipt: receipt };
@@ -1999,10 +2049,107 @@ function backfillCreatedAt() {
   Logger.log('Backfilled ' + fixedCreated + ' Created At and ' + fixedApproved + ' Approved At cells');
 }
 
-// One click in the Apps Script editor: restores every blank Created / Approved /
-// Dispensed date it can (Created from the saved copy or photo time, Dispensed from
-// the receipt number). Only blank cells are written.
+// Fills every BLANK Created / Approved / Dispensed cell in rows [startRow, startRow+n-1]
+// of one sheet: from the saved copy in the hidden OTP column first, then (Created) the
+// Caller Photo's upload time when allowed, (Approved) the creation time for rows that skip
+// the Manager, and (Dispensed) the receipt number. Only blank cells are written. Returns
+// the number of cells restored.
+function restoreDatesForRows_(sheet, startRow, n, useDrive) {
+  if (n < 1) return 0;
+  var created = sheet.getRange(startRow, COL.CREATED_AT, n, 1).getValues();
+  var approved = sheet.getRange(startRow, COL.APPROVED_AT, n, 1).getValues();
+  var dispensed = sheet.getRange(startRow, COL.DISP_AT, n, 1).getValues();
+  var stamps = sheet.getRange(startRow, COL.OTP, n, 1).getValues();
+  var statuses = sheet.getRange(startRow, COL.STATUS, n, 1).getValues();
+  var mgrs = sheet.getRange(startRow, COL.MGR_NAME, n, 1).getValues();
+  var receipts = sheet.getRange(startRow, COL.RECEIPT, n, 1).getValues();
+  var photos = useDrive ? sheet.getRange(startRow, COL.CALLER_PHOTO, n, 1).getValues() : null;
+  var ids = sheet.getRange(startRow, COL.ID, n, 1).getValues();
+  var fixed = 0, cChg = false, aChg = false, dChg = false;
+  for (var i = 0; i < n; i++) {
+    if (!ids[i][0]) continue;
+    var st = String(statuses[i][0]);
+    var direct = /direct\)/.test(String(mgrs[i][0]));
+    if (!created[i][0]) {
+      var d = stampGet_(stamps[i][0], 'CT');
+      if (!d && photos) {
+        var m = String(photos[i][0] || '').match(/[?&]id=([^&]+)/);
+        if (m) { try { d = DriveApp.getFileById(m[1]).getDateCreated(); } catch (e) { /* file gone */ } }
+      }
+      if (d) { created[i][0] = d; fixed++; cChg = true; }
+    }
+    if (!approved[i][0] && (st === 'Approved' || st === 'Dispensed' || st === 'Rejected')) {
+      var a = stampGet_(stamps[i][0], 'AT') || (direct && created[i][0] ? created[i][0] : null);
+      if (a) { approved[i][0] = a; fixed++; aChg = true; }
+    }
+    if (!dispensed[i][0] && st === 'Dispensed') {
+      var t = stampGet_(stamps[i][0], 'DT') || dispenseTimeFromReceipt_(receipts[i][0]);
+      if (t) { dispensed[i][0] = t; fixed++; dChg = true; }
+    }
+  }
+  if (cChg) sheet.getRange(startRow, COL.CREATED_AT, n, 1).setValues(created);
+  if (aChg) sheet.getRange(startRow, COL.APPROVED_AT, n, 1).setValues(approved);
+  if (dChg) sheet.getRange(startRow, COL.DISP_AT, n, 1).setValues(dispensed);
+  return fixed;
+}
+
+// One click in the Apps Script editor (also run automatically every 15 minutes once
+// installDateGuards() has been run): restores every blank Created / Approved /
+// Dispensed date on the Requests, Office-Tanker and Credit Diesel sheets.
 function backfillAllDates() {
-  backfillCreatedAt();
-  backfillDispensedAt();
+  var total = 0;
+  [getSheet_(), getOfficeSheet_(), getCreditSheet_()].forEach(function(sheet) {
+    var last = sheet.getLastRow();
+    if (last >= 2) total += restoreDatesForRows_(sheet, 2, last - 1, true);
+  });
+  Logger.log('backfillAllDates restored ' + total + ' date cells');
+  return total;
+}
+
+// Timer entry point: same repair, but skipped if a request is being written right now.
+function autoRepairDates() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return;
+  try { backfillAllDates(); } finally { lock.releaseLock(); }
+}
+
+// Fires on every manual edit of the sheets. If a date cell (Created / Approved /
+// Dispensed) was just cleared, put it back at once from the saved copy, and note who did
+// it in the "Date Guard Log" tab so the cause can be traced.
+function onSheetEditGuard(e) {
+  try {
+    if (!e || !e.range) return;
+    var sheet = e.range.getSheet();
+    var nm = sheet.getName();
+    if (nm !== SHEET_NAME && nm !== OFFICE_SHEET_NAME && nm !== CREDIT_SHEET_NAME) return;
+    var c1 = e.range.getColumn(), c2 = e.range.getLastColumn();
+    var touches = [COL.CREATED_AT, COL.APPROVED_AT, COL.DISP_AT].some(function(c) { return c >= c1 && c <= c2; });
+    if (!touches) return;
+    var r1 = Math.max(2, e.range.getRow()), r2 = e.range.getLastRow();
+    if (r2 < r1 || r2 - r1 > 600) return;
+    var restored = restoreDatesForRows_(sheet, r1, r2 - r1 + 1, false);
+    if (!restored) return;
+    var log = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Date Guard Log');
+    if (!log) {
+      log = SpreadsheetApp.getActiveSpreadsheet().insertSheet('Date Guard Log');
+      log.getRange(1, 1, 1, 5).setValues([['When', 'Who', 'Sheet', 'Range edited', 'Date cells restored']]);
+      log.setFrozenRows(1);
+    }
+    var who = '';
+    try { who = (e.user && e.user.getEmail()) || ''; } catch (err) {}
+    log.appendRow([new Date(), who, nm, e.range.getA1Notation(), restored]);
+  } catch (err) { Logger.log('onSheetEditGuard: ' + err.message); }
+}
+
+// RUN THIS ONCE from the Apps Script editor (it asks for permission once): installs the
+// 15-minute auto-repair and the edit guard. Safe to run again — old copies are replaced.
+function installDateGuards() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    var h = t.getHandlerFunction();
+    if (h === 'autoRepairDates' || h === 'onSheetEditGuard') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('autoRepairDates').timeBased().everyMinutes(15).create();
+  ScriptApp.newTrigger('onSheetEditGuard').forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet()).onEdit().create();
+  Logger.log('Date guards installed: auto-repair every 15 min + edit guard.');
+  backfillAllDates();
 }
