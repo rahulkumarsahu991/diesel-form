@@ -867,7 +867,7 @@
   }
 
   /* Pending / Approved / All come from the lightweight "team" list (Requests + Office-Tanker,
-     without Credit / Party entries). "All" is capped to the newest 700 unless a From/To date
+     without Credit / Party entries). "All" is capped to the newest 500 unless a From/To date
      range is chosen (the range is then filtered on the server). The last list of each tab is
      kept on this phone, so the tab opens instantly and refreshes in the background. */
   var DT_CACHE_PREFIX = 'dtl4_';
@@ -877,7 +877,7 @@
     var q = '?action=list&source=team&status=' + encodeURIComponent(status);
     if (status === '') {
       var lo = dateFromInput.value || dateToInput.value, hi = dateToInput.value || dateFromInput.value;
-      q += (lo || hi) ? ('&from=' + encodeURIComponent(lo) + '&to=' + encodeURIComponent(hi)) : '&limit=700';
+      q += (lo || hi) ? ('&from=' + encodeURIComponent(lo) + '&to=' + encodeURIComponent(hi)) : '&limit=500';
     }
     return q;
   }
