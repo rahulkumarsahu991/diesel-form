@@ -584,7 +584,7 @@ function listRequests_(status, by, limit, source, opts) {
   rows.sort(newestFirstByCreated_);
   var max = Number(limit) || 0;
   if (max && rows.length > max) rows = rows.slice(0, max);
-  return { ok: true, rows: rows };
+  return { ok: true, rows: rows, team: source === 'team' };
 }
 
 function readRequestRows_(sheet, status, by) {

@@ -915,6 +915,14 @@
     fetch(APPS_SCRIPT_URL + query)
       .then(function(r){ return r.json(); })
       .then(function(res){
+        // A backend that predates the 'team' list answers with the Manager's list instead:
+        // fall back to the old merged list so nothing is missing from the Diesel Team's view.
+        if (res.ok && /source=team/.test(query) && !res.team) {
+          return fetch(APPS_SCRIPT_URL + '?action=list&source=all&status=' + encodeURIComponent(requestedStatus)).then(function(r){ return r.json(); });
+        }
+        return res;
+      })
+      .then(function(res){
         if (token !== listRequestToken) return; // stale response, ignore
         if (!res.ok) { if (!cached) approvedList.innerHTML = '<div style="padding:10px;color:var(--red);">Error: ' + esc(res.error) + '</div>'; return; }
         teamCacheWrite_(cacheKey, res.rows);
