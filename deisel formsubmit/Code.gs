@@ -328,7 +328,7 @@ function doGet(e) {
   try {
     var action = e && e.parameter ? e.parameter.action : '';
     var p = (e && e.parameter) ? e.parameter : {};
-    if (action === 'list') return jsonOut_(listRequests_(p.status || '', p.by || '', p.limit || '', p.source || ''));
+    if (action === 'list') return jsonOut_(listRequests_(p.status || '', p.by || '', p.limit || '', p.source || '', p));
     if (action === 'verify') return jsonOut_(checkApproved_(p.id));
     if (action === 'get') return jsonOut_(getRequest_(p.id));
     if (action === 'vehicles') return jsonOut_(listVehicles_());
@@ -544,9 +544,17 @@ function rowToObj_(row) {
 //            'office' -> "Office-Tanker" only (the Office form's own
 //                        "My Requests" section)
 //            'all'    -> both, merged (Director Overview, Diesel Team's list)
-function listRequests_(status, by, limit, source) {
+function listRequests_(status, by, limit, source, opts) {
+  opts = opts || {};
   var rows;
-  if (source === 'office') {
+  if (source === 'team') {
+    // Diesel Team's Pending / Approved / All tabs: Requests + Office-Tanker only. Credit and
+    // Party Diesel entries have their own buttons there, so they are not sent with this list
+    // (they were most of the "Approved" rows and made the download several times bigger).
+    rows = readRequestRows_(getSheet_(), status, by)
+      .concat(readRequestRows_(getOfficeSheet_(), status, by))
+      .filter(function(r){ return r.managerName !== CREDIT_MARKER && r.managerName !== PARTY_MARKER && !/^(CR|PD)\d/i.test(String(r.id)); });
+  } else if (source === 'office') {
     rows = readRequestRows_(getOfficeSheet_(), status, by);
   } else if (source === 'credit') {
     rows = readRequestRows_(getCreditSheet_(), status, by)
@@ -563,6 +571,15 @@ function listRequests_(status, by, limit, source) {
   } else {
     // Manager's view: credit Back Date and Party Diesel rows skip the Manager, so they stay out.
     rows = readRequestRows_(getSheet_(), status, by).filter(function(r){ return r.managerName !== CREDIT_MARKER && r.managerName !== PARTY_MARKER; });
+  }
+  if (opts.from || opts.to) {
+    // from / to are yyyy-MM-dd calendar days (IST) of Created At
+    rows = rows.filter(function(r){
+      var d = r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt);
+      if (!r.createdAt || isNaN(d.getTime())) return true; // never hide a row only because its date is blank
+      var day = Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd');
+      return (!opts.from || day >= opts.from) && (!opts.to || day <= opts.to);
+    });
   }
   rows.sort(newestFirstByCreated_);
   var max = Number(limit) || 0;
@@ -590,32 +607,38 @@ function readRequestRows_(sheet, status, by) {
 // refuel history. Merges both sheets, since a vehicle can be fueled via
 // either form. Filtered/trimmed on the server instead of downloading
 // the whole list.
-// Fills made at a pump OUTSIDE this app (no OTP) are only recorded in the pump
-// sheet ("NEW DIESEL&UREA": A = pump, B = date dd-MM-yyyy, C = vehicle, D = liters,
-// I = KM). Fills that did go through the app also appear there but under a pump
-// name containing "OTP" (e.g. "HPCL OTP DMRPL"), so those are skipped here to
-// avoid listing the same fill twice. Only the newest ~8000 rows are read (the
-// sheet is appended chronologically and has 17k+ rows); result cached 5 min.
-function pumpSheetHistory_(vehicle, limit) {
-  if (!vehicle) return { ok: false, error: 'Provide a Vehicle No' };
-  var target = String(vehicle).replace(/\s+/g, '').toUpperCase();
-  var max = Number(limit) || 5;
+// Pump-sheet fills made outside the app: ONE read of the newest 8000 rows builds an index
+// {p: [pump names], v: {VEHICLE: [[ms, liters, km, pumpIdx], ...newest first]}} that is cached
+// for 20 min (and refreshed by the warm-up timer), so every vehicle lookup is a cache hit.
+function getPumpIndex_(force) {
   var cache = CacheService.getScriptCache();
-  var key = 'pumph_' + target;
-  var cached = cache.get(key);
-  if (cached) return { ok: true, rows: JSON.parse(cached).slice(0, max) };
-
+  if (!force) {
+    var cached = cache.get('pumpidx_v1');
+    if (cached) return JSON.parse(cached);
+  }
+  var idx = buildPumpIndex_();
+  var s = JSON.stringify(idx);
+  if (s.length > 90000) { // CacheService values are limited to ~100 KB: keep fewer fills per vehicle
+    Object.keys(idx.v).forEach(function(k){ idx.v[k] = idx.v[k].slice(0, 3); });
+    s = JSON.stringify(idx);
+  }
+  try { if (s.length <= 95000) cache.put('pumpidx_v1', s, 1200); } catch (e) {}
+  return idx;
+}
+function buildPumpIndex_() {
+  var idx = { p: [], v: {} };
   var ss = SpreadsheetApp.openById(PUMP_SHEET_ID);
   var sheet = findSheetLoose_(ss, PUMP_SHEET_NAME);
-  if (!sheet) return { ok: true, rows: [] };
+  if (!sheet) return idx;
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { ok: true, rows: [] };
+  if (lastRow < 2) return idx;
   var startRow = Math.max(2, lastRow - 8000 + 1);
   var data = sheet.getRange(startRow, 1, lastRow - startRow + 1, 9).getValues();
-  var rows = [];
+  var pumpPos = {};
   for (var i = 0; i < data.length; i++) {
     var r = data[i];
-    if (String(r[2] || '').replace(/\s+/g, '').toUpperCase() !== target) continue;
+    var veh = String(r[2] || '').replace(/\s+/g, '').toUpperCase();
+    if (!veh) continue;
     var pump = String(r[0] || '').replace(/\s+/g, ' ').trim();
     if (!pump || /OTP/i.test(pump)) continue;
     var liters = Number(r[3]);
@@ -623,16 +646,26 @@ function pumpSheetHistory_(vehicle, limit) {
     var when = parsePumpSheetDate_(r[1]);
     if (!when) continue;
     var km = Number(r[8]);
-    rows.push({
-      createdAt: when, dispensedAt: when, sortAt: when,
-      actualLiters: liters, odometerKm: km > 0 ? km : '',
-      driverName: '', pumpName: pump, isPump: true
-    });
+    if (pumpPos[pump] === undefined) { pumpPos[pump] = idx.p.length; idx.p.push(pump); }
+    (idx.v[veh] = idx.v[veh] || []).push([when.getTime(), liters, km > 0 ? km : 0, pumpPos[pump]]);
   }
-  rows.sort(function(a, b){ return b.sortAt - a.sortAt; });
-  rows = rows.slice(0, 10);
-  try { cache.put(key, JSON.stringify(rows), 300); } catch (e) {}
-  return { ok: true, rows: rows.slice(0, max) };
+  Object.keys(idx.v).forEach(function(k){
+    idx.v[k].sort(function(a, b){ return b[0] - a[0]; });
+    idx.v[k] = idx.v[k].slice(0, 6);
+  });
+  return idx;
+}
+
+function pumpSheetHistory_(vehicle, limit) {
+  if (!vehicle) return { ok: false, error: 'Provide a Vehicle No' };
+  var target = String(vehicle).replace(/\s+/g, '').toUpperCase();
+  var max = Number(limit) || 5;
+  var idx = getPumpIndex_();
+  var rows = (idx.v[target] || []).slice(0, max).map(function(x){
+    var when = new Date(x[0]);
+    return { createdAt: when, dispensedAt: when, sortAt: when, actualLiters: x[1], odometerKm: x[2] > 0 ? x[2] : '', driverName: '', pumpName: idx.p[x[3]], isPump: true };
+  });
+  return { ok: true, rows: rows };
 }
 
 function parsePumpSheetDate_(v) {
@@ -649,10 +682,20 @@ function vehicleHistory_(vehicle, limit, fuelType, includeOpen, excludeId) {
   if (!vehicle) return { ok: false, error: 'Provide a Vehicle No' };
   var target = String(vehicle).trim().toUpperCase();
   var max = Number(limit) || 5;
-  var rows = readVehicleHistoryRows_(getSheet_(), target, fuelType, includeOpen)
+  // The Requests sheet is by far the biggest (thousands of rows, growing every day), so only
+  // its newest 2500 rows are scanned first; the older part is read too only when that did not
+  // yield enough fills for this vehicle (a vehicle idle for months still shows its history).
+  var mainSheet = getSheet_();
+  var windowStart = Math.max(2, mainSheet.getLastRow() - 2500 + 1);
+  var rows = readVehicleHistoryRows_(mainSheet, target, fuelType, includeOpen, windowStart)
     .concat(readVehicleHistoryRows_(getOfficeSheet_(), target, fuelType, includeOpen))
     .concat(readCreditHistoryRows_(target, fuelType, includeOpen));
   if (excludeId) rows = rows.filter(function(r){ return String(r.id) !== String(excludeId); });
+  if (rows.length < max && windowStart > 2) {
+    var older = readVehicleHistoryRows_(mainSheet, target, fuelType, includeOpen, 2, windowStart - 1);
+    if (excludeId) older = older.filter(function(r){ return String(r.id) !== String(excludeId); });
+    rows = rows.concat(older);
+  }
   // Row order != dispense order (an older request can still be dispensed later),
   // so we sort by actual dispense time before taking the latest N. A row with a
   // missing/corrupt dispensedAt (e.g. a manually-edited sheet cell) sorts to the
@@ -707,10 +750,12 @@ function readCreditHistoryRows_(target, fuelType, includeOpen) {
 // type are returned (the Office form's history box switches with its tab, so
 // picking Urea shouldn't show a Diesel fill and vice versa). Empty = no filter,
 // used by the Diesel-only forms (calling-form, diesel-dispense).
-function readVehicleHistoryRows_(sheet, target, fuelType, includeOpen) {
+function readVehicleHistoryRows_(sheet, target, fuelType, includeOpen, fromRow, toRow) {
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
-  var data = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
+  var first = Math.max(2, fromRow || 2);
+  var last = Math.min(lastRow, toRow || lastRow);
+  if (last < first) return [];
+  var data = sheet.getRange(first, 1, last - first + 1, HEADERS.length).getValues();
   var rows = [];
   for (var i = 0; i < data.length; i++) {
     var r = data[i];
@@ -1630,21 +1675,26 @@ function lookupDriverInAttendance_(targetLower) {
 // present or absent (attendance TRUE/FALSE is not checked).
 // Result is cached for 10 minutes (keyed by today's date) since the whole
 // sheet only needs re-reading once per day in practice.
+// Today's Vehicle -> driver map from the Attendance sheet (cached 20 min; refreshed every
+// 10 min by the warm-up timer so callers never wait for the slow cold read).
+function getAttendanceMap_(force) {
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'attmap3_' + Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
+  if (!force) {
+    var cached = cache.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+  }
+  var map = buildTodayAttendanceMap_();
+  // 1 minute only if nothing was found, so a late-created tab is picked up quickly
+  try { cache.put(cacheKey, JSON.stringify(map), Object.keys(map).length ? 1200 : 60); } catch (e) {}
+  return map;
+}
+
 function lookupDriverByVehicleToday_(vehicle) {
   if (!vehicle) return { ok: false, error: 'Provide a Vehicle No' };
   var target = String(vehicle).trim().toUpperCase();
 
-  var cache = CacheService.getScriptCache();
-  var todayKey = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
-  var cacheKey = 'attmap3_' + todayKey;
-  var map;
-  var cached = cache.get(cacheKey);
-  if (cached) {
-    map = JSON.parse(cached);
-  } else {
-    map = buildTodayAttendanceMap_();
-    try { cache.put(cacheKey, JSON.stringify(map), Object.keys(map).length ? 600 : 60); } catch (e) {} // 10 min (1 min if nothing was found, so a late-created tab is picked up quickly)
-  }
+  var map = getAttendanceMap_();
 
   // Route/Trip + Current Location from the Calling Sheet ride along in the same
   // response (one round trip for the form instead of two), even when no driver
@@ -1659,18 +1709,19 @@ function lookupDriverByVehicleToday_(vehicle) {
 // (K = From, L = To, M = Current Location). The sheet is read once and cached
 // for 2 minutes (it changes through the day as calls are logged); the last row
 // of a vehicle wins if it appears more than once.
-function getTripInfo_(vehicleUpper) {
+function getTripMap_(force) {
   var cache = CacheService.getScriptCache();
   var key = 'tripmap_' + Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
-  var map;
-  var cached = cache.get(key);
-  if (cached) {
-    map = JSON.parse(cached);
-  } else {
-    map = buildTripInfoMap_();
-    try { cache.put(key, JSON.stringify(map), 120); } catch (e) {}
+  if (!force) {
+    var cached = cache.get(key);
+    if (cached) return JSON.parse(cached);
   }
-  return map[vehicleUpper] || { route: '', currentLocation: '' };
+  var map = buildTripInfoMap_();
+  try { cache.put(key, JSON.stringify(map), 720); } catch (e) {} // 12 min (was 2: every 2nd lookup was a cold read)
+  return map;
+}
+function getTripInfo_(vehicleUpper) {
+  return getTripMap_()[vehicleUpper] || { route: '', currentLocation: '' };
 }
 
 function buildTripInfoMap_() {
@@ -2157,6 +2208,29 @@ function onSheetEditGuard(e) {
   } catch (err) { Logger.log('onSheetEditGuard: ' + err.message); }
 }
 
+// Keeps the slow-to-read data (Attendance, Calling Sheet, pump sheet) cached so the forms
+// never wait for a cold read. Runs on a 10-minute timer (installSpeedBoost), skipped
+// at night to save trigger run-time quota.
+function warmCachesNow_() {
+  try { getAttendanceMap_(true); } catch (e) { Logger.log('warm attendance: ' + e.message); }
+  try { getTripMap_(true); } catch (e) { Logger.log('warm trip: ' + e.message); }
+  try { getPumpIndex_(true); } catch (e) { Logger.log('warm pump: ' + e.message); }
+}
+function warmCaches_() {
+  var h = Number(Utilities.formatDate(new Date(), TIMEZONE, 'H'));
+  if (h < 6 || h >= 23) return;
+  warmCachesNow_();
+}
+// Run once from the Apps Script editor (also called by installDateGuards).
+function installSpeedBoost() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'warmCaches_') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('warmCaches_').timeBased().everyMinutes(10).create();
+  warmCachesNow_();
+  Logger.log('Speed boost installed: caches refreshed every 10 minutes (6 am - 11 pm).');
+}
+
 // RUN THIS ONCE from the Apps Script editor (it asks for permission once): installs the
 // 15-minute auto-repair and the edit guard. Safe to run again — old copies are replaced.
 function installDateGuards() {
@@ -2167,5 +2241,6 @@ function installDateGuards() {
   ScriptApp.newTrigger('autoRepairDates').timeBased().everyMinutes(15).create();
   ScriptApp.newTrigger('onSheetEditGuard').forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet()).onEdit().create();
   Logger.log('Date guards installed: auto-repair every 15 min + edit guard.');
+  installSpeedBoost();
   backfillAllDates();
 }

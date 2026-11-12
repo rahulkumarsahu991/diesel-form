@@ -684,6 +684,7 @@
     }).then(function(r){ return r.json(); })
     .then(function(res){
       if (!res.ok) { showErr(msg, '❌ ' + res.error); return; }
+      teamCacheClear_();
       showReceipt(res.receipt);
     })
     .catch(function(err){ showErr(msg, '❌ Network error: ' + err.message); })
@@ -805,19 +806,20 @@
   var dateFromInput = document.getElementById('dateFrom');
   var dateToInput = document.getElementById('dateTo');
   var summaryBar = document.getElementById('summaryBar');
+  function onDateFilterChange_(){ if (listStatus === '') loadRequestsList(); else applySearchAndRender(); }
   [dateFromInput, dateToInput].forEach(function(el){
-    el.addEventListener('change', applySearchAndRender);
+    el.addEventListener('change', onDateFilterChange_);
   });
   document.getElementById('dateToday').addEventListener('click', function(){
     var t = toDateStr_(new Date());
     dateFromInput.value = t;
     dateToInput.value = t;
-    applySearchAndRender();
+    onDateFilterChange_();
   });
   document.getElementById('dateClear').addEventListener('click', function(){
     dateFromInput.value = '';
     dateToInput.value = '';
-    applySearchAndRender();
+    onDateFilterChange_();
   });
 
   function toDateStr_(d){
@@ -864,6 +866,34 @@
     renderApprovedList(rows);
   }
 
+  /* Pending / Approved / All come from the lightweight "team" list (Requests + Office-Tanker,
+     without Credit / Party entries). "All" is capped to the newest 700 unless a From/To date
+     range is chosen (the range is then filtered on the server). The last list of each tab is
+     kept on this phone, so the tab opens instantly and refreshes in the background. */
+  var DT_CACHE_PREFIX = 'dtl4_';
+  function teamListQuery_(status){
+    if (status === 'credit') return '?action=list&source=credit';
+    if (status === 'party') return '?action=list&source=party';
+    var q = '?action=list&source=team&status=' + encodeURIComponent(status);
+    if (status === '') {
+      var lo = dateFromInput.value || dateToInput.value, hi = dateToInput.value || dateFromInput.value;
+      q += (lo || hi) ? ('&from=' + encodeURIComponent(lo) + '&to=' + encodeURIComponent(hi)) : '&limit=700';
+    }
+    return q;
+  }
+  function teamCacheClear_(){
+    try { Object.keys(localStorage).filter(function(k){ return k.indexOf(DT_CACHE_PREFIX) === 0; }).forEach(function(k){ localStorage.removeItem(k); }); } catch (e) {}
+  }
+  function teamCacheRead_(key){
+    try { var c = JSON.parse(localStorage.getItem(DT_CACHE_PREFIX + key) || 'null'); return c && c.rows ? c : null; } catch (e) { return null; }
+  }
+  function teamCacheWrite_(key, rows){
+    try {
+      var s = JSON.stringify({ t: Date.now(), rows: rows });
+      if (s.length < 450000) localStorage.setItem(DT_CACHE_PREFIX + key, s);
+    } catch (e) { /* storage full — cache is optional */ }
+  }
+
   function loadRequestsList(){
     if (!APPS_SCRIPT_URL) {
       approvedList.innerHTML = '<div style="padding:10px;color:var(--muted);">Setup pending.</div>';
@@ -871,20 +901,33 @@
     }
     var token = ++listRequestToken;
     var requestedStatus = listStatus;
-    approvedList.innerHTML = '<div style="padding:10px;color:var(--muted);">Loading...</div>';
-    summaryBar.innerHTML = '';
-    fetch(APPS_SCRIPT_URL + (requestedStatus === 'credit' ? '?action=list&source=credit' : requestedStatus === 'party' ? '?action=list&source=party' : '?action=list&source=all&status=' + encodeURIComponent(requestedStatus)))
+    var query = teamListQuery_(requestedStatus);
+    var cacheKey = query;
+    var cached = teamCacheRead_(cacheKey);
+    if (cached) {
+      listLoadedFor = requestedStatus;
+      listRowsCache = cached.rows;
+      applySearchAndRender();
+    } else {
+      approvedList.innerHTML = '<div style="padding:10px;color:var(--muted);">Loading...</div>';
+      summaryBar.innerHTML = '';
+    }
+    fetch(APPS_SCRIPT_URL + query)
       .then(function(r){ return r.json(); })
       .then(function(res){
         if (token !== listRequestToken) return; // stale response, ignore
-        if (!res.ok) { approvedList.innerHTML = '<div style="padding:10px;color:var(--red);">Error: ' + esc(res.error) + '</div>'; return; }
+        if (!res.ok) { if (!cached) approvedList.innerHTML = '<div style="padding:10px;color:var(--red);">Error: ' + esc(res.error) + '</div>'; return; }
+        teamCacheWrite_(cacheKey, res.rows);
+        // Nothing changed since the cached copy -> leave the screen alone (keeps open cards open)
+        if (cached && JSON.stringify(cached.rows.map(function(r){ return [r.id, r.status, r.dispensedAt]; })) ===
+                       JSON.stringify(res.rows.map(function(r){ return [r.id, r.status, r.dispensedAt]; }))) { return; }
         listLoadedFor = requestedStatus;
         listRowsCache = res.rows;
         applySearchAndRender();
       })
       .catch(function(err){
         if (token !== listRequestToken) return;
-        approvedList.innerHTML = '<div style="padding:10px;color:var(--red);">Network error: ' + esc(err.message) + '</div>';
+        if (!cached) approvedList.innerHTML = '<div style="padding:10px;color:var(--red);">Network error: ' + esc(err.message) + '</div>';
       });
   }
 

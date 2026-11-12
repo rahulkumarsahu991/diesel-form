@@ -553,20 +553,41 @@
   });
   document.getElementById('refreshBtn').addEventListener('click', loadList);
 
+  /* The last list of each status tab is kept on this phone so it opens instantly; the fresh
+     list replaces it a moment later (and only if something actually changed). */
+  // After an approve / reject the saved lists are out of date: drop them so a stale copy is never shown
+  function mgrCacheClear_(){
+    try { Object.keys(localStorage).filter(function(k){ return k.indexOf('mgrl4_') === 0; }).forEach(function(k){ localStorage.removeItem(k); }); } catch (e) {}
+  }
+
   function loadList(){
     if (!APPS_SCRIPT_URL) {
       listEl.innerHTML = '<div class="empty">⚠️ Setup pending: deploy Code.gs and paste the APPS_SCRIPT_URL here in the HTML.</div>';
       return;
     }
-    listEl.innerHTML = '<div class="empty">Loading...</div>';
-    summaryBar.innerHTML = '';
-    var url = APPS_SCRIPT_URL + '?action=list&status=' + encodeURIComponent(currentStatus);
+    var status = currentStatus;
+    var cacheKey = 'mgrl4_' + status;
+    var cached = null;
+    try { cached = JSON.parse(localStorage.getItem(cacheKey) || 'null'); } catch (e) {}
+    if (cached && cached.rows) {
+      lastRows = cached.rows;
+      applyFilterAndRender();
+    } else {
+      cached = null;
+      listEl.innerHTML = '<div class="empty">Loading...</div>';
+      summaryBar.innerHTML = '';
+    }
+    var url = APPS_SCRIPT_URL + '?action=list&status=' + encodeURIComponent(status);
     fetch(url).then(function(r){ return r.json(); }).then(function(res){
-      if (!res.ok) { listEl.innerHTML = '<div class="empty">Error: ' + res.error + '</div>'; return; }
+      if (status !== currentStatus) return; // user switched tab meanwhile
+      if (!res.ok) { if (!cached) listEl.innerHTML = '<div class="empty">Error: ' + res.error + '</div>'; return; }
+      try { var s = JSON.stringify({ t: Date.now(), rows: res.rows }); if (s.length < 450000) localStorage.setItem(cacheKey, s); } catch (e) {}
+      var sig = function(rows){ return JSON.stringify(rows.map(function(r){ return [r.id, r.status, r.approvedLiters, r.managerRemarks]; })); };
+      if (cached && sig(cached.rows) === sig(res.rows)) { lastRows = res.rows; return; } // unchanged: leave open cards alone
       lastRows = res.rows;
       applyFilterAndRender();
     }).catch(function(err){
-      listEl.innerHTML = '<div class="empty">Network error: ' + err.message + '</div>';
+      if (!cached) listEl.innerHTML = '<div class="empty">Network error: ' + err.message + '</div>';
     });
   }
 
@@ -774,6 +795,7 @@
       })
     }).then(function(r){ return r.json(); }).then(function(res){
       if (!res.ok) { showCardError(body, res.error); setActionsLoading(actions, false); return; }
+      mgrCacheClear_();
       actions.remove();
       var box = document.createElement('div');
       box.className = 'otp-box';
@@ -795,6 +817,7 @@
       body: JSON.stringify({ action: 'reject', id: id, managerName: managerName, managerRemarks: fields.managerRemarks })
     }).then(function(r){ return r.json(); }).then(function(res){
       if (!res.ok) { showCardError(body, res.error); setActionsLoading(actions, false); return; }
+      mgrCacheClear_();
       loadList();
     }).catch(function(err){ showCardError(body, err.message); setActionsLoading(actions, false); });
   }
