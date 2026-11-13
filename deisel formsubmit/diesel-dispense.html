@@ -1106,7 +1106,7 @@
 
           var pendingRows = res.rows.filter(function(r){ return r.status === 'Pending'; });
           var otherRows = res.rows.filter(function(r){ return r.status !== 'Pending'; });
-          var recent = pendingRows.concat(otherRows.slice(0, Math.max(15 - pendingRows.length, 0)));
+          var recent = pendingRows.concat(otherRows.slice(0, Math.max(15 - pendingRows.length, 6)));
           listEl.innerHTML = recent.length ? recent.map(function(r, i){
             return '<div class="live-list-row" style="animation-delay:' + (i * 0.045) + 's"><span><span class="lid">' + esc(r.id) + '</span><span class="lveh">' + esc(r.vehicleNo || '') + '</span>' + liveSub_(r) + '</span>' +
               '<span class="status-chip status-' + r.status + '">' + esc(r.status) + '</span></div>';
