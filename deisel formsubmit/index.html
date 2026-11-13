@@ -65,6 +65,9 @@
     box-shadow:0 2px 8px rgba(16,19,46,.12);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
   .ov-toolbar button.active{background:var(--orange);color:#fff;border-color:var(--orange);}
   .ov-refresh{margin-left:auto;background:none !important;border:none !important;color:var(--gold) !important;}
+  .ov-search{flex:1 1 260px;min-width:200px;max-width:420px;width:auto;margin:0;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.92);color:#111827;font-size:13px;font-weight:600;}
+  .ov-search::placeholder{color:#6b7280;font-weight:500;}
+  .ov-search:focus{outline:2px solid var(--orange);outline-offset:0;}
   .ov-danger{background:rgba(220,38,38,.15) !important;border:1px solid rgba(220,38,38,.5) !important;color:#fca5a5 !important;}
   .ov-danger:active{background:rgba(220,38,38,.3) !important;}
   .ov-credit{background:rgba(124,58,237,.18) !important;border:1px solid rgba(124,58,237,.5) !important;color:#c4b5fd !important;}
@@ -344,6 +347,7 @@
       <button class="ov-party" id="partyDieselBtn">🤝 Party Diesel</button>
       <button class="ov-fixdates" id="fixDatesBtn" title="Fill every blank Created / Approved / Dispensed date">📅 Fill Dates</button>
       <button class="ov-danger" id="clearDataBtn">🗑️ Clear All Data</button>
+      <input type="search" class="ov-search" id="ovSearch" placeholder="🔍 Search Vehicle No or Request ID..." autocomplete="off" autocapitalize="characters">
       <button class="ov-refresh" id="ovRefresh">↻ Refresh</button>
     </div>
 
@@ -555,6 +559,13 @@
   var ovBody = document.getElementById('ovBody');
   var allRequests = [];
   var ovStatus = '';
+  var ovQuery = '';
+  var ovSearchTimer = null;
+  document.getElementById('ovSearch').addEventListener('input', function(){
+    var v = this.value;
+    clearTimeout(ovSearchTimer);
+    ovSearchTimer = setTimeout(function(){ ovQuery = v.replace(/\s+/g, '').toUpperCase(); renderTable(); }, 150);
+  });
 
   document.querySelectorAll('.ov-filter').forEach(function(btn){
     btn.addEventListener('click', function(){
@@ -773,7 +784,13 @@
   function renderTable(){
     var base = dateFilteredRequests_();
     var rows = ovStatus ? base.filter(function(r){ return r.status === ovStatus; }) : base;
-    if (!rows.length) { ovBody.innerHTML = '<tr><td colspan="13" class="ov-empty">No requests found.</td></tr>'; return; }
+    if (ovQuery) {
+      rows = rows.filter(function(r){
+        return String(r.id || '').toUpperCase().indexOf(ovQuery) !== -1 ||
+               String(r.vehicleNo || '').replace(/\s+/g, '').toUpperCase().indexOf(ovQuery) !== -1;
+      });
+    }
+    if (!rows.length) { ovBody.innerHTML = '<tr><td colspan="13" class="ov-empty">' + (ovQuery ? 'No request found for this Vehicle No / Request ID.' : 'No requests found.') + '</td></tr>'; return; }
     ovBody.innerHTML = rows.map(function(r){
       // data-label shows a heading next to each value in the mobile card view
       return '<tr>' +
