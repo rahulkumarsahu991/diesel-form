@@ -1027,8 +1027,8 @@
 
   /* ---------- Odometer sanity check ----------
      A new reading can never be LOWER than the vehicle's last refueling reading. When it is,
-     the box turns red with the last reading shown and the form cannot be submitted. For a
-     Back Date request only readings up to the picked date are considered. */
+     the box turns red with the last reading shown and the form cannot be submitted. This check
+     is OFF while a Back Date is selected (any reading is accepted then). */
   var odoRefRows = [];
   var odoInputEl = document.getElementById('odometerKm');
   var odoWarnEl = document.getElementById('odoWarn');
@@ -1049,6 +1049,8 @@
     return null;
   }
   function odometerProblem_(){
+    // Back Date entries record an older fill, so any odometer reading is accepted for them
+    if (backDateInput && backDateInput.value) return '';
     var cur = parseFloat(String(odoInputEl.value).replace(',', '.'));
     if (!(cur > 0)) return '';
     var ref = lastOdoReference_();
