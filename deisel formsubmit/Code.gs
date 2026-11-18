@@ -388,9 +388,20 @@ function jsonOut_(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// The "does the tab exist / has the header / enough columns" checks cost 2-3 Sheets calls on EVERY
+// request. Once a tab has passed them the fact is remembered for 6 h (CacheService), so later calls
+// only open the tab.
+function sheetReady_(name) {
+  try { return CacheService.getScriptCache().get('ready1_' + name) === '1'; } catch (e) { return false; }
+}
+function markSheetReady_(name) {
+  try { CacheService.getScriptCache().put('ready1_' + name, '1', 21600); } catch (e) {}
+}
+
 function getSheet_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(SHEET_NAME);
+  if (sheet && sheetReady_(SHEET_NAME)) return sheet;
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_NAME);
   }
@@ -399,6 +410,7 @@ function getSheet_() {
     sheet.setFrozenRows(1);
   }
   ensureColumns_(sheet);
+  markSheetReady_(SHEET_NAME);
   return sheet;
 }
 
@@ -417,6 +429,7 @@ function ensureColumns_(sheet) {
 function getOfficeSheet_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(OFFICE_SHEET_NAME);
+  if (sheet && sheetReady_(OFFICE_SHEET_NAME)) return sheet;
   if (!sheet) {
     sheet = ss.insertSheet(OFFICE_SHEET_NAME);
   }
@@ -429,6 +442,7 @@ function getOfficeSheet_() {
     sheet.hideColumns(COL.OTP);
   }
   ensureColumns_(sheet);
+  markSheetReady_(OFFICE_SHEET_NAME);
   return sheet;
 }
 
@@ -439,6 +453,7 @@ function getOfficeSheet_() {
 function getCreditSheet_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(CREDIT_SHEET_NAME);
+  if (sheet && sheetReady_(CREDIT_SHEET_NAME)) return sheet;
   if (!sheet) {
     sheet = ss.insertSheet(CREDIT_SHEET_NAME);
   }
@@ -447,6 +462,7 @@ function getCreditSheet_() {
     sheet.setFrozenRows(1);
   }
   ensureColumns_(sheet);
+  markSheetReady_(CREDIT_SHEET_NAME);
   return sheet;
 }
 
@@ -808,11 +824,58 @@ function getRequest_(id) {
 // rows, reading all HEADERS.length columns for every row just to find one by
 // ID (the old approach) got noticeably slower on every approve/reject/dispense/
 // delete/get call — this keeps the cost flat regardless of sheet size.
+// ID -> row number for the newest ~1500 rows of each tab, kept in CacheService. findRow_ then reads
+// just that one row (and checks its ID, so a shifted row can never be mistaken); only on a miss is
+// the whole ID column scanned, and the index is rebuilt from that scan.
+var ROWIDX_KEEP = 1500;
+function rowIdxKey_(sheet) { return 'rowidx1_' + sheet.getName(); }
+function rowIdxGet_(sheet, id) {
+  try {
+    var s = CacheService.getScriptCache().get(rowIdxKey_(sheet));
+    if (!s) return 0;
+    return JSON.parse(s)[id] || 0;
+  } catch (e) { return 0; }
+}
+function rowIdxAdd_(sheet, id, rowIndex) {
+  try {
+    var cache = CacheService.getScriptCache();
+    var key = rowIdxKey_(sheet);
+    var s = cache.get(key);
+    var m = s ? JSON.parse(s) : {};
+    m[id] = rowIndex;
+    var keys = Object.keys(m);
+    if (keys.length > ROWIDX_KEEP + 300) {
+      var minRow = rowIndex - ROWIDX_KEEP;
+      keys.forEach(function(k) { if (m[k] < minRow) delete m[k]; });
+    }
+    var out = JSON.stringify(m);
+    if (out.length < 95000) cache.put(key, out, 21600);
+  } catch (e) {}
+}
+function rowIdxRebuild_(sheet, ids, firstRow) {
+  try {
+    var m = {};
+    var from = Math.max(0, ids.length - ROWIDX_KEEP);
+    for (var i = from; i < ids.length; i++) { var v = String(ids[i][0] || ''); if (v) m[v] = firstRow + i; }
+    var out = JSON.stringify(m);
+    if (out.length < 95000) CacheService.getScriptCache().put(rowIdxKey_(sheet), out, 21600);
+  } catch (e) {}
+}
+function rowIdxClear_(sheet) {
+  try { CacheService.getScriptCache().remove(rowIdxKey_(sheet)); } catch (e) {}
+}
+
 function findRow_(id) {
   var sheet = sheetForId_(id);
+  var cachedRow = rowIdxGet_(sheet, id);
+  if (cachedRow >= 2) {
+    var cv = sheet.getRange(cachedRow, 1, 1, HEADERS.length).getValues()[0];
+    if (String(cv[COL.ID - 1]) === String(id)) return { rowIndex: cachedRow, values: cv, sheet: sheet };
+  }
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
   var ids = sheet.getRange(2, COL.ID, lastRow - 1, 1).getValues();
+  rowIdxRebuild_(sheet, ids, 2);
   for (var i = 0; i < ids.length; i++) {
     if (String(ids[i][0]) === String(id)) {
       var rowIndex = i + 2;
@@ -913,6 +976,7 @@ function createRequest_(body) {
     stampRowDates_(row);
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush(); // make sure this write is visible before the lock releases
+    rowIdxAdd_(sheet, id, nextRow);
     ensureDateCells_(sheet, nextRow, now, null);
     rememberClientId_(body, id);
   } finally {
@@ -998,6 +1062,7 @@ function createCreditRequest_(body) {
     stampRowDates_(row);
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush();
+    rowIdxAdd_(sheet, id, nextRow);
     ensureDateCells_(sheet, nextRow, now, now);
     rememberClientId_(body, id);
   } finally {
@@ -1132,6 +1197,7 @@ function createPartyRequest_(body) {
     stampRowDates_(row);
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush();
+    rowIdxAdd_(sheet, id, nextRow);
     ensureDateCells_(sheet, nextRow, now, now);
     rememberClientId_(body, id);
   } finally {
@@ -1229,6 +1295,7 @@ function createBackDateRequest_(body) {
     stampRowDates_(row);
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush();
+    rowIdxAdd_(sheet, id, nextRow);
     ensureDateCells_(sheet, nextRow, createdAt, (isCredit || isParty) ? row[COL.APPROVED_AT - 1] : null);
     rememberClientId_(body, id);
   } finally {
@@ -1355,6 +1422,7 @@ function createOfficeRequest_(body) {
     stampRowDates_(row);
     sheet.getRange(nextRow, 1, 1, HEADERS.length).setValues([fillEmpty_(row)]);
     SpreadsheetApp.flush();
+    rowIdxAdd_(sheet, id, nextRow);
     ensureDateCells_(sheet, nextRow, now, now);
     rememberClientId_(body, id);
     return { ok: true, requestId: id };
@@ -1464,6 +1532,8 @@ function checkApproved_(id) {
 function rowHintFor_(id) {
   try {
     var sheet = sheetForId_(id);
+    var fast = rowIdxGet_(sheet, id);
+    if (fast >= 2) return { sheet: sheet, rowIndex: fast };
     var last = sheet.getLastRow();
     if (last < 2) return null;
     var ids = sheet.getRange(2, COL.ID, last - 1, 1).getValues();
@@ -1900,6 +1970,7 @@ function archiveAndClearSheet_(sheet, clearedBy) {
   archiveRequests_(sheet, clearedBy);
   var count = lastRow - 1;
   sheet.deleteRows(2, count);
+  rowIdxClear_(sheet);
   return count;
 }
 
@@ -2068,6 +2139,7 @@ function deleteRequestRow_(body) {
     var found = findRow_(body.id);
     if (!found) return { ok: false, error: 'Request ID not found' };
     found.sheet.deleteRow(found.rowIndex);
+    rowIdxClear_(found.sheet);
     Logger.log('Request ' + body.id + ' deleted via web app.');
     return { ok: true };
   } finally {
