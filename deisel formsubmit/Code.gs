@@ -828,16 +828,30 @@ function findRow_(id) {
 // cleaning up a test entry), a row-count-based scheme would reuse an ID
 // that's still sitting in a later row, producing duplicates. Scanning for
 // the actual max used number is immune to gaps from manual deletions.
-function nextRequestSeq_(sheet) {
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return 1;
-  var ids = sheet.getRange(2, COL.ID, lastRow - 1, 1).getValues();
-  var maxSeq = 0;
-  for (var i = 0; i < ids.length; i++) {
-    var m = String(ids[i][0] || '').match(/^DSL(\d+)$/);
-    if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
+// Highest used sequence number for an ID pattern, e.g. /^DSL(\d+)$/. IDs are only ever appended, so
+// the highest one is among the newest rows: only the last 800 rows are read (inside the lock that
+// every submit takes); the whole sheet is read only if none is found there (rarely-used prefixes).
+function maxSeqInSheet_(sheet, re) {
+  var last = sheet.getLastRow();
+  if (last < 2) return 0;
+  function scan(from, to) {
+    if (to < from) return 0;
+    var ids = sheet.getRange(from, COL.ID, to - from + 1, 1).getValues();
+    var best = 0;
+    for (var i = 0; i < ids.length; i++) {
+      var m = String(ids[i][0] || '').match(re);
+      if (m) best = Math.max(best, parseInt(m[1], 10));
+    }
+    return best;
   }
-  return maxSeq + 1;
+  var start = Math.max(2, last - 800 + 1);
+  var best = scan(start, last);
+  if (best === 0 && start > 2) best = scan(2, start - 1);
+  return best;
+}
+
+function nextRequestSeq_(sheet) {
+  return maxSeqInSheet_(sheet, /^DSL(\d+)$/) + 1;
 }
 
 function createRequest_(body) {
@@ -918,15 +932,7 @@ function createRequest_(body) {
 
 // Same idea as nextRequestSeq_() but scans for the highest CR### used.
 function nextCreditRequestSeq_(sheet) {
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return 1;
-  var ids = sheet.getRange(2, COL.ID, lastRow - 1, 1).getValues();
-  var maxSeq = 0;
-  for (var i = 0; i < ids.length; i++) {
-    var m = String(ids[i][0] || '').match(/^CR(\d+)$/);
-    if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
-  }
-  return maxSeq + 1;
+  return maxSeqInSheet_(sheet, /^CR(\d+)$/) + 1;
 }
 
 // Calling form's "Credit Diesel" checkbox — a credit-diesel fill that skips the
@@ -1052,13 +1058,13 @@ function ensureCell_(sheet, rowIndex, col, date) {
 // cell came back blank, write it again once and flush.
 function ensureDateCells_(sheet, rowIndex, createdAt, approvedAt) {
   try {
-    var c = sheet.getRange(rowIndex, COL.CREATED_AT);
-    if (!c.getValue()) { c.setValue(createdAt); }
-    if (approvedAt) {
-      var q = sheet.getRange(rowIndex, COL.APPROVED_AT);
-      if (!q.getValue()) { q.setValue(approvedAt); }
-    }
-    SpreadsheetApp.flush();
+    // ONE read of the two date cells (B..Q); nothing is written or flushed when both are fine
+    var span = COL.APPROVED_AT - COL.CREATED_AT + 1;
+    var vals = sheet.getRange(rowIndex, COL.CREATED_AT, 1, span).getValues()[0];
+    var wrote = false;
+    if (!vals[0]) { sheet.getRange(rowIndex, COL.CREATED_AT).setValue(createdAt); wrote = true; }
+    if (approvedAt && !vals[span - 1]) { sheet.getRange(rowIndex, COL.APPROVED_AT).setValue(approvedAt); wrote = true; }
+    if (wrote) SpreadsheetApp.flush();
   } catch (e) { Logger.log('ensureDateCells_ failed: ' + e.message); }
 }
 
@@ -1140,15 +1146,7 @@ function createPartyRequest_(body) {
 }
 
 function nextPartySeq_(sheet) {
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return 1;
-  var ids = sheet.getRange(2, COL.ID, lastRow - 1, 1).getValues();
-  var maxSeq = 0;
-  for (var i = 0; i < ids.length; i++) {
-    var m = String(ids[i][0] || '').match(/^PD(\d+)$/);
-    if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
-  }
-  return maxSeq + 1;
+  return maxSeqInSheet_(sheet, /^PD(\d+)$/) + 1;
 }
 
 // Calling form's "Back Date" mode (IDs BACKD###; PDB### when combined with Party Diesel) - a normal request (Manager -> Diesel Team) for a
@@ -1253,29 +1251,12 @@ function createBackDateRequest_(body) {
 }
 
 function nextBackDateSeq_(sheet, prefix) {
-  var idRe = new RegExp('^' + prefix + '(\\d+)$');
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return 1;
-  var ids = sheet.getRange(2, COL.ID, lastRow - 1, 1).getValues();
-  var maxSeq = 0;
-  for (var i = 0; i < ids.length; i++) {
-    var m = String(ids[i][0] || '').match(idRe);
-    if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
-  }
-  return maxSeq + 1;
+  return maxSeqInSheet_(sheet, new RegExp('^' + prefix + '(\\d+)$')) + 1;
 }
 
 // Same idea as nextRequestSeq_() but scans for the highest OT### used.
 function nextOfficeRequestSeq_(sheet) {
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return 1;
-  var ids = sheet.getRange(2, COL.ID, lastRow - 1, 1).getValues();
-  var maxSeq = 0;
-  for (var i = 0; i < ids.length; i++) {
-    var m = String(ids[i][0] || '').match(/^OT(\d+)$/);
-    if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
-  }
-  return maxSeq + 1;
+  return maxSeqInSheet_(sheet, /^OT(\d+)$/) + 1;
 }
 
 // Drive folder that holds Before/After refueling photos from the Office
