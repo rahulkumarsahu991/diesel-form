@@ -1382,11 +1382,12 @@ function approveRequest_(body) {
   if (/^OT/i.test(body.id || '')) {
     return { ok: false, error: 'Office/Tanker requests go straight to the Diesel Team — no manager approval needed.' };
   }
+  var hint = rowHintFor_(body.id);
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   var vehicleNo, approvedLiters, managerName;
   try {
-    var found = findRow_(body.id);
+    var found = findRowWithHint_(body.id, hint);
     if (!found) return { ok: false, error: 'Request ID not found' };
     if (found.values[COL.STATUS - 1] !== 'Pending') {
       return { ok: false, error: 'This request is already "' + found.values[COL.STATUS - 1] + '"' };
@@ -1472,7 +1473,38 @@ function checkApproved_(id) {
   return { ok: true, row: rowToObj_(found.values) };
 }
 
+// The ID -> row position scan (a few thousand rows) is done BEFORE the script lock is taken;
+// inside the lock only that one row is re-read and its ID re-checked (falls back to a full
+// search if rows moved), so the lock is held for a fraction of the time.
+function rowHintFor_(id) {
+  try {
+    var sheet = sheetForId_(id);
+    var last = sheet.getLastRow();
+    if (last < 2) return null;
+    var ids = sheet.getRange(2, COL.ID, last - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(id)) return { sheet: sheet, rowIndex: i + 2 };
+    }
+  } catch (e) { /* no hint: full search below */ }
+  return null;
+}
+function findRowWithHint_(id, hint) {
+  if (hint) {
+    var values = hint.sheet.getRange(hint.rowIndex, 1, 1, HEADERS.length).getValues()[0];
+    if (String(values[COL.ID - 1]) === String(id)) return { rowIndex: hint.rowIndex, values: values, sheet: hint.sheet };
+  }
+  return findRow_(id);
+}
+
 function dispenseRequest_(body) {
+  // The same save re-sent by a phone whose first reply got lost (clientId) returns the
+  // receipt that was already made instead of an "already dispensed" error.
+  var again = dupRequestId_(body);
+  if (again) {
+    var prev = findRow_(again);
+    if (prev) return { ok: true, receipt: rowToObj_(prev.values), duplicate: true };
+  }
+  var hint = rowHintFor_(body.id);
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -1480,7 +1512,7 @@ function dispenseRequest_(body) {
     // own findRow_) plus reusing the already-updated in-memory row for the
     // return value (instead of re-reading the sheet a third time) — this used
     // to cost 3 findRow_ calls + 7 separate setValue calls per dispense.
-    var found = findRow_(body.id);
+    var found = findRowWithHint_(body.id, hint);
     if (!found) return { ok: false, error: 'Request ID not found' };
     if (found.values[COL.STATUS - 1] === 'Dispensed') {
       return { ok: false, error: 'This diesel has already been dispensed' };
@@ -1519,6 +1551,7 @@ function dispenseRequest_(body) {
 
     sheet.getRange(found.rowIndex, 1, 1, HEADERS.length).setValues([values]);
     ensureCell_(sheet, found.rowIndex, COL.DISP_AT, values[COL.DISP_AT - 1]);
+    rememberClientId_(body, body.id);
 
     var receipt = rowToObj_(values);
     return { ok: true, receipt: receipt };
@@ -2101,13 +2134,14 @@ function backfillCreatedAt() {
   Logger.log('Backfilled ' + fixedCreated + ' Created At and ' + fixedApproved + ' Approved At cells');
 }
 
-// Fills every BLANK Created / Approved / Dispensed cell in rows [startRow, startRow+n-1]
-// of one sheet: from the saved copy in the hidden OTP column first, then (Created) the
-// Caller Photo's upload time when allowed, (Approved) the creation time for rows that skip
-// the Manager, and (Dispensed) the receipt number. Only blank cells are written. Returns
-// the number of cells restored.
-function restoreDatesForRows_(sheet, startRow, n, useDrive) {
-  if (n < 1) return 0;
+// Looks for BLANK Created / Approved / Dispensed cells in rows [startRow, startRow+n-1] of one
+// sheet and works out their value: from the saved copy in the hidden OTP column first, then
+// (Created) the Caller Photo's upload time when allowed, (Approved) the creation time for rows
+// that skip the Manager, and (Dispensed) the receipt number. Reading takes no lock; returns a
+// list of {row, col, value}.
+function collectDateFixes_(sheet, startRow, n, useDrive) {
+  var fixes = [];
+  if (n < 1) return fixes;
   var created = sheet.getRange(startRow, COL.CREATED_AT, n, 1).getValues();
   var approved = sheet.getRange(startRow, COL.APPROVED_AT, n, 1).getValues();
   var dispensed = sheet.getRange(startRow, COL.DISP_AT, n, 1).getValues();
@@ -2117,32 +2151,53 @@ function restoreDatesForRows_(sheet, startRow, n, useDrive) {
   var receipts = sheet.getRange(startRow, COL.RECEIPT, n, 1).getValues();
   var photos = useDrive ? sheet.getRange(startRow, COL.CALLER_PHOTO, n, 1).getValues() : null;
   var ids = sheet.getRange(startRow, COL.ID, n, 1).getValues();
-  var fixed = 0, cChg = false, aChg = false, dChg = false;
   for (var i = 0; i < n; i++) {
     if (!ids[i][0]) continue;
     var st = String(statuses[i][0]);
     var direct = /direct\)/.test(String(mgrs[i][0]));
-    if (!created[i][0]) {
+    var createdVal = created[i][0];
+    if (!createdVal) {
       var d = stampGet_(stamps[i][0], 'CT');
       if (!d && photos) {
         var m = String(photos[i][0] || '').match(/[?&]id=([^&]+)/);
         if (m) { try { d = DriveApp.getFileById(m[1]).getDateCreated(); } catch (e) { /* file gone */ } }
       }
-      if (d) { created[i][0] = d; fixed++; cChg = true; }
+      if (d) { fixes.push({ row: startRow + i, col: COL.CREATED_AT, value: d }); createdVal = d; }
     }
     if (!approved[i][0] && (st === 'Approved' || st === 'Dispensed' || st === 'Rejected')) {
-      var a = stampGet_(stamps[i][0], 'AT') || (direct && created[i][0] ? created[i][0] : null);
-      if (a) { approved[i][0] = a; fixed++; aChg = true; }
+      var a = stampGet_(stamps[i][0], 'AT') || (direct && createdVal ? createdVal : null);
+      if (a) fixes.push({ row: startRow + i, col: COL.APPROVED_AT, value: a });
     }
     if (!dispensed[i][0] && st === 'Dispensed') {
       var t = stampGet_(stamps[i][0], 'DT') || dispenseTimeFromReceipt_(receipts[i][0]);
-      if (t) { dispensed[i][0] = t; fixed++; dChg = true; }
+      if (t) fixes.push({ row: startRow + i, col: COL.DISP_AT, value: t });
     }
   }
-  if (cChg) sheet.getRange(startRow, COL.CREATED_AT, n, 1).setValues(created);
-  if (aChg) sheet.getRange(startRow, COL.APPROVED_AT, n, 1).setValues(approved);
-  if (dChg) sheet.getRange(startRow, COL.DISP_AT, n, 1).setValues(dispensed);
-  return fixed;
+  return fixes;
+}
+
+// Writes the fixes one cell at a time, re-checking that each cell is STILL blank, and holds
+// the script lock only for this short write (nothing at all when there is nothing to fix),
+// so a repair can never keep a Dispense / Approve / Submit waiting.
+function applyDateFixes_(sheet, fixes) {
+  if (!fixes.length) return 0;
+  var lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  var done = 0;
+  try {
+    fixes.forEach(function(f) {
+      var cell = sheet.getRange(f.row, f.col);
+      if (!cell.getValue()) { cell.setValue(f.value); done++; }
+    });
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  return done;
+}
+
+function restoreDatesForRows_(sheet, startRow, n, useDrive) {
+  return applyDateFixes_(sheet, collectDateFixes_(sheet, startRow, n, useDrive));
 }
 
 // One click in the Apps Script editor (also run automatically every 15 minutes once
@@ -2164,20 +2219,13 @@ function repairDatesWeb_() {
   var cache = CacheService.getScriptCache();
   if (cache.get('repair_running')) return { ok: false, error: 'A repair was just run — wait a few seconds and try again.' };
   try { cache.put('repair_running', '1', 30); } catch (e) {}
-  var lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    return { ok: true, restored: backfillAllDates() };
-  } finally {
-    lock.releaseLock();
-  }
+  return { ok: true, restored: backfillAllDates() };
 }
 
-// Timer entry point: same repair, but skipped if a request is being written right now.
+// Timer entry point. It reads everything WITHOUT the script lock (the lock is taken only for
+// the few cells that really need fixing), so it can't hold up a Dispense / Approve / Submit.
 function autoRepairDates() {
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(5000)) return;
-  try { backfillAllDates(); } finally { lock.releaseLock(); }
+  backfillAllDates();
 }
 
 // Fires on every manual edit of the sheets. If a date cell (Created / Approved /

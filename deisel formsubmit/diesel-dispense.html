@@ -662,6 +662,34 @@
     amountEl.value = rate && liters ? '₹ ' + (rate * liters).toFixed(2) : '';
   }
 
+  /* Saving on a weak network: each try is given 40 s, a failed try is repeated once with the
+     SAME clientId (the server then never dispenses twice), "Saving..." tells the user when it is
+     slow, and if the reply is lost but the save went through, the receipt is fetched instead
+     of showing an error. */
+  function postDispense_(payload, timeoutMs){
+    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function(){ ctrl.abort(); }, timeoutMs) : null;
+    return fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function(r){ return r.json(); })
+      .then(function(res){ if (timer) clearTimeout(timer); return res; },
+            function(err){ if (timer) clearTimeout(timer); throw err; });
+  }
+  function pause_(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  // Asks the server whether this request has been dispensed; if so, shows its receipt.
+  function recoverReceipt_(id){
+    return fetch(APPS_SCRIPT_URL + '?action=get&id=' + encodeURIComponent(id))
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (res.ok && res.row && res.row.status === 'Dispensed') { teamCacheClear_(); showReceipt(res.row); return true; }
+        return false;
+      })
+      .catch(function(){ return false; });
+  }
+
   function confirmDispense(){
     var msg = document.getElementById('dispenseMsg');
     msg.className = 'msg';
@@ -676,21 +704,33 @@
 
     var btn = document.getElementById('confirmBtn');
     btn.disabled = true; btn.textContent = 'Saving...';
+    var slowTimer = setTimeout(function(){ btn.textContent = 'Saving... network slow hai, ruk jaiye ⏳'; }, 6000);
 
     var id = document.getElementById('reqId').value.trim();
+    var payload = {
+      action: 'dispense', id: id, pumpLocation: pumpLocation, ratePerLiter: ratePerLiter, dispensedBy: dispensedBy,
+      actualLiters: creditRow ? actualLiters : undefined,
+      clientId: 'dsp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10)
+    };
 
-    fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'dispense', id: id, pumpLocation: pumpLocation, ratePerLiter: ratePerLiter, dispensedBy: dispensedBy, actualLiters: creditRow ? actualLiters : undefined })
-    }).then(function(r){ return r.json(); })
-    .then(function(res){
-      if (!res.ok) { showErr(msg, '❌ ' + res.error); return; }
-      teamCacheClear_();
-      showReceipt(res.receipt);
-    })
-    .catch(function(err){ showErr(msg, '❌ Network error: ' + err.message); })
-    .finally(function(){ btn.disabled = false; btn.textContent = '✔ Confirm & Generate Receipt'; });
+    postDispense_(payload, 40000)
+      .catch(function(){
+        btn.textContent = 'Dobara koshish ho rahi hai...';
+        return pause_(1500).then(function(){ return postDispense_(payload, 40000); });
+      })
+      .then(function(res){
+        if (res.ok) { teamCacheClear_(); showReceipt(res.receipt); return; }
+        if (/already been dispensed/i.test(res.error || '')) {
+          return recoverReceipt_(id).then(function(found){ if (!found) showErr(msg, '❌ ' + res.error); });
+        }
+        showErr(msg, '❌ ' + res.error);
+      }, function(){
+        // Both tries failed: the first one may still have been saved on the server
+        return recoverReceipt_(id).then(function(found){
+          if (!found) showErr(msg, '❌ Network problem — pata nahi chala ki save hua ya nahi. Thodi der baad dobara "Confirm" dabaiye (double dispense nahi hoga), ya Request ID se dobara kholiye.');
+        });
+      })
+      .finally(function(){ clearTimeout(slowTimer); btn.disabled = false; btn.textContent = '✔ Confirm & Generate Receipt'; });
   }
 
   function showReceipt(r){
