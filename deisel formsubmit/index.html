@@ -1,6 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+/* Hung-call insurance. Google's Apps Script server sometimes leaves a call silent for 30-60 s while
+   the very next identical call is answered in 3 s. Every call to the server is therefore repeated if
+   it has not been answered in time and the FIRST answer wins:
+     - reading calls (GET): repeated after 9 s and again after 22 s;
+     - saving calls that carry a clientId (submit request, dispense): repeated after 15 s and 30 s -
+       the server recognises the clientId, so a repeat can never create or dispense twice.
+   Other saving calls (approve / reject / delete) are never repeated. */
+(function(){
+  var origFetch = window.fetch ? window.fetch.bind(window) : null;
+  if (!origFetch) return;
+  window.fetch = function(input, init){
+    var url = typeof input === 'string' ? input : ((input && input.url) || '');
+    if (url.indexOf('script.google.com/macros') === -1) return origFetch(input, init);
+    var method = String((init && init.method) || 'GET').toUpperCase();
+    var delays;
+    if (method === 'GET') {
+      delays = [0, 9000, 22000];
+    } else if (method === 'POST' && init && typeof init.body === 'string' && init.body.indexOf('"clientId"') !== -1) {
+      delays = [0, 15000, 30000];
+    } else {
+      return origFetch(input, init);
+    }
+    return new Promise(function(resolve, reject){
+      var finished = false, launched = 0, failed = 0, timers = [];
+      function launch(){
+        if (finished || launched >= delays.length) return;
+        launched++;
+        origFetch(input, init).then(function(res){
+          if (finished) return;
+          finished = true; timers.forEach(clearTimeout); resolve(res);
+        }, function(err){
+          failed++;
+          if (finished) return;
+          if (failed >= delays.length) { finished = true; timers.forEach(clearTimeout); reject(err); }
+          else if (launched < delays.length) launch(); // an attempt failed outright: try the next one now
+        });
+      }
+      launch();
+      for (var i = 1; i < delays.length; i++) timers.push(setTimeout(launch, delays[i]));
+    });
+  };
+})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/png" href="logo.png">
