@@ -1593,14 +1593,28 @@
       return '<div class="lsub"><b>' + esc(liveLiters_(liters)) + '</b>' + (who ? ' • ' + label + esc(who) : '') + '</div>';
     }
 
+    // Counts and the rows to show come from ONE small cached answer ("live", ~10 KB) shared by
+    // all phones. A backend that predates it answers "Unknown action": then the old 500-row list is used.
+    function liveFromRows_(rows){
+      var counts = { Pending: 0, Approved: 0, Dispensed: 0 };
+      rows.forEach(function(r){ counts[r.status] = (counts[r.status] || 0) + 1; });
+      var pendingRows = rows.filter(function(r){ return r.status === 'Pending'; });
+      var otherRows = rows.filter(function(r){ return r.status !== 'Pending'; });
+      return { ok: true, counts: counts, rows: pendingRows.concat(otherRows.slice(0, Math.max(15 - pendingRows.length, 6))) };
+    }
     function refreshLive_(){
       if (!APPS_SCRIPT_URL) return;
-      fetch(APPS_SCRIPT_URL + '?action=list&limit=500&source=all')
+      fetch(APPS_SCRIPT_URL + '?action=live')
         .then(function(r){ return r.json(); })
         .then(function(res){
+          if (res.ok && res.counts) return res;
+          return fetch(APPS_SCRIPT_URL + '?action=list&limit=500&source=all')
+            .then(function(r){ return r.json(); })
+            .then(function(old){ return old.ok ? liveFromRows_(old.rows) : old; });
+        })
+        .then(function(res){
           if (!res.ok) { updatedEl.textContent = 'Error: ' + res.error; return; }
-          var counts = { Pending: 0, Approved: 0, Dispensed: 0 };
-          res.rows.forEach(function(r){ counts[r.status] = (counts[r.status] || 0) + 1; });
+          var counts = res.counts;
           var pendEl = document.getElementById('liveNumPending');
           var apprEl = document.getElementById('liveNumApproved');
           var dispEl = document.getElementById('liveNumDispensed');
@@ -1609,9 +1623,7 @@
           if (prevCounts.Dispensed !== counts.Dispensed) bumpNum_(dispEl, counts.Dispensed); else dispEl.textContent = counts.Dispensed;
           prevCounts = counts;
 
-          var pendingRows = res.rows.filter(function(r){ return r.status === 'Pending'; });
-          var otherRows = res.rows.filter(function(r){ return r.status !== 'Pending'; });
-          var recent = pendingRows.concat(otherRows.slice(0, Math.max(15 - pendingRows.length, 6)));
+          var recent = res.rows;
           listEl.innerHTML = recent.length ? recent.map(function(r, i){
             return '<div class="live-list-row" style="animation-delay:' + (i * 0.045) + 's"><span><span class="lid">' + esc(r.id) + '</span><span class="lveh">' + esc(r.vehicleNo || '') + '</span>' + liveSub_(r) + '</span>' +
               '<span class="status-chip status-' + r.status + '">' + esc(r.status) + '</span></div>';

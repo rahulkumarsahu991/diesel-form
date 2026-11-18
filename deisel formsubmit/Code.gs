@@ -338,6 +338,7 @@ function doGet(e) {
     if (action === 'routes') return jsonOut_(listRoutes_());
     if (action === 'history') return jsonOut_(vehicleHistory_(p.vehicle, p.limit || 5, p.fuelType || '', p.includeOpen === '1', p.exclude || ''));
     if (action === 'pumpHistory') return jsonOut_(pumpSheetHistory_(p.vehicle, p.limit || 5));
+    if (action === 'live') return jsonOut_(liveSnapshot_());
     // All three dropdown lists in a single round-trip (Apps Script takes ~2.5s
     // per call regardless of payload size, so fewer calls is the real speed win)
     if (action === 'lists') {
@@ -1708,6 +1709,27 @@ function lookupDriverInAttendance_(targetLower) {
 // present or absent (attendance TRUE/FALSE is not checked).
 // Result is cached for 10 minutes (keyed by today's date) since the whole
 // sheet only needs re-reading once per day in practice.
+// Live Status panel (open on every phone, refreshed every 20 s): the counts and the handful of
+// rows it shows are worked out ONCE per 20 s and shared by everybody, instead of every phone
+// downloading 500 rows (~400 KB) and making the server read all three sheets each time.
+function liveSnapshot_() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('live_v1');
+  if (cached) return JSON.parse(cached);
+  var rows = listRequests_('', '', 500, 'all').rows;
+  var counts = { Pending: 0, Approved: 0, Dispensed: 0 };
+  rows.forEach(function(r){ counts[r.status] = (counts[r.status] || 0) + 1; });
+  var pending = rows.filter(function(r){ return r.status === 'Pending'; });
+  var other = rows.filter(function(r){ return r.status !== 'Pending'; });
+  var recent = pending.concat(other.slice(0, Math.max(15 - pending.length, 6))).map(function(r){
+    return { id: r.id, vehicleNo: r.vehicleNo, status: r.status, requestedLiters: r.requestedLiters, approvedLiters: r.approvedLiters,
+             actualLiters: r.actualLiters, requestedBy: r.requestedBy, managerName: r.managerName, dispensedBy: r.dispensedBy };
+  });
+  var out = { ok: true, counts: counts, rows: recent };
+  try { cache.put('live_v1', JSON.stringify(out), 20); } catch (e) {}
+  return out;
+}
+
 // Today's Vehicle -> driver map from the Attendance sheet (cached 20 min; refreshed every
 // 10 min by the warm-up timer so callers never wait for the slow cold read).
 function getAttendanceMap_(force) {
