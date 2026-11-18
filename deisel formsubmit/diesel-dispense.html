@@ -587,6 +587,41 @@
     });
   }
 
+  /* Opening a request by its ID: if it is already in a list saved on this phone and is "Approved",
+     the dispense form opens AT ONCE and the server re-checks it in the background (if it turned out
+     to be dispensed / changed meanwhile, the form is closed with the reason). Only an ID that is not
+     in the saved lists waits for the server, as before. */
+  function cachedRowById_(id){
+    var want = String(id).trim().toUpperCase(), found = null;
+    function scan(rows){
+      if (found || !rows) return;
+      for (var i = 0; i < rows.length; i++) { if (String(rows[i].id).toUpperCase() === want) { found = rows[i]; return; } }
+    }
+    scan(listRowsCache);
+    try {
+      Object.keys(localStorage).forEach(function(k){
+        if (found || k.indexOf(DT_CACHE_PREFIX) !== 0) return;
+        var c = JSON.parse(localStorage.getItem(k) || 'null');
+        scan(c && c.rows);
+      });
+    } catch (e) {}
+    return found;
+  }
+
+  // Keeps the Approved list fresh on this phone (page open + every 3 min while visible) so typed IDs are found
+  function prefetchApprovedList_(){
+    if (!APPS_SCRIPT_URL || document.hidden) return;
+    var q = teamListQuery_('Approved');
+    var c = teamCacheRead_(q);
+    if (c && Date.now() - c.t < 120000) return;
+    fetch(APPS_SCRIPT_URL + q).then(function(r){ return r.json(); })
+      .then(function(res){ if (res.ok && res.team) teamCacheWrite_(q, res.rows); })
+      .catch(function(){});
+  }
+  prefetchApprovedList_();
+  setInterval(prefetchApprovedList_, 180000);
+  document.addEventListener('visibilitychange', prefetchApprovedList_);
+
   function loadRequest(id){
     var msg = document.getElementById('verifyMsg');
     msg.className = 'msg';
@@ -594,6 +629,28 @@
     if (!APPS_SCRIPT_URL) { showErr(msg, 'Setup pending: deploy Code.gs and paste the APPS_SCRIPT_URL here in the HTML.'); return; }
     if (!id) { showErr(msg, 'Enter a Request ID.'); return; }
     document.getElementById('reqId').value = id;
+
+    var cachedRow = cachedRowById_(id);
+    if (cachedRow && cachedRow.status === 'Approved') {
+      verifiedRow = cachedRow;
+      showDispenseForm(cachedRow);
+      fetch(APPS_SCRIPT_URL + '?action=verify&id=' + encodeURIComponent(id))
+        .then(function(r){ return r.json(); })
+        .then(function(res){
+          if (verifiedRow !== cachedRow) return; // the user already moved on to something else
+          if (!res.ok) {
+            document.getElementById('dispenseCard').style.display = 'none';
+            document.getElementById('verifyCard').style.display = '';
+            showErr(msg, '❌ ' + res.error);
+          } else if (String(res.row.approvedLiters) !== String(cachedRow.approvedLiters) || String(res.row.vehicleNo) !== String(cachedRow.vehicleNo)) {
+            verifiedRow = res.row; showDispenseForm(res.row); // details changed since the saved list: show the current ones
+          } else {
+            verifiedRow = res.row;
+          }
+        })
+        .catch(function(){ /* offline check failed: dispensing re-checks on the server anyway */ });
+      return;
+    }
 
     var btn = document.getElementById('verifyBtn');
     btn.disabled = true; btn.textContent = 'Loading...';
