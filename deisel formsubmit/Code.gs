@@ -339,7 +339,7 @@ function doGet(e) {
     if (action === 'vehicleDriver') return jsonOut_(lookupDriverByVehicleToday_(p.vehicle));
     if (action === 'pumps') return jsonOut_(listPumps_());
     if (action === 'routes') return jsonOut_(listRoutes_());
-    if (action === 'history') return jsonOut_(vehicleHistory_(p.vehicle, p.limit || 5, p.fuelType || '', p.includeOpen === '1', p.exclude || ''));
+    if (action === 'history') return jsonOut_(vehicleHistory_(p.vehicle, p.limit || 5, p.fuelType || '', p.includeOpen === '1', p.exclude || '', p.withPump === '1'));
     if (action === 'pumpHistory') return jsonOut_(pumpSheetHistory_(p.vehicle, p.limit || 5));
     if (action === 'live') return jsonOut_(liveSnapshot_());
     // All three dropdown lists in a single round-trip (Apps Script takes ~2.5s
@@ -698,7 +698,7 @@ function parsePumpSheetDate_(v) {
 // includeOpen - also list requests that were submitted but not dispensed yet
 // (Pending/Approved), used by the Calling and Manager pages; exclude = a
 // request ID to leave out (the one the Manager is looking at).
-function vehicleHistory_(vehicle, limit, fuelType, includeOpen, excludeId) {
+function vehicleHistory_(vehicle, limit, fuelType, includeOpen, excludeId, withPump) {
   if (!vehicle) return { ok: false, error: 'Provide a Vehicle No' };
   var target = String(vehicle).trim().toUpperCase();
   var max = Number(limit) || 5;
@@ -727,7 +727,10 @@ function vehicleHistory_(vehicle, limit, fuelType, includeOpen, excludeId) {
     if (isNaN(tb)) tb = -Infinity;
     return tb - ta;
   });
-  return { ok: true, rows: rows.slice(0, max) };
+  // withPump: also return the pump-sheet fills in the same answer (one call instead of two)
+  var out = { ok: true, rows: rows.slice(0, max) };
+  if (withPump) out.pumpRows = pumpSheetHistory_(vehicle, max).rows;
+  return out;
 }
 
 // Credit Diesel history: rows made before the Diesel Team step existed carry
