@@ -328,6 +328,9 @@ function doGet(e) {
   try {
     var action = e && e.parameter ? e.parameter.action : '';
     var p = (e && e.parameter) ? e.parameter : {};
+    // Tiny "wake up" call from the pages: answers at once without touching any sheet, so the
+    // server is already awake when the real call (e.g. Dispense) comes a few seconds later.
+    if (action === 'ping') return jsonOut_({ ok: true, t: Date.now() });
     if (action === 'list') return jsonOut_(listRequests_(p.status || '', p.by || '', p.limit || '', p.source || '', p));
     if (action === 'verify') return jsonOut_(checkApproved_(p.id));
     if (action === 'get') return jsonOut_(getRequest_(p.id));

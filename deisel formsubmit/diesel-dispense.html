@@ -610,6 +610,7 @@
   }
 
   function showDispenseForm(row){
+    if (window.pingServer_) window.pingServer_();
     document.getElementById('verifyCard').style.display = 'none';
     var box = document.getElementById('detailsBox');
     box.innerHTML =
@@ -1174,6 +1175,25 @@
 /* Number fields change only by typing — scroll-wheel / arrow keys must not nudge the value (an empty field jumped to 0, 1, 2...) */
 document.addEventListener("wheel", function(e){ var t = e.target; if (t && t.type === "number" && document.activeElement === t) t.blur(); }, { passive: true });
 document.addEventListener("keydown", function(e){ var t = e.target; if (t && t.type === "number" && (e.key === "ArrowUp" || e.key === "ArrowDown")) e.preventDefault(); });
+</script>
+<script>
+/* Wakes the Apps Script server before it is needed. After a quiet spell Google puts it to sleep
+   and the next real call (a Dispense, a Submit) waits 10+ s for it to start; a tiny "ping" on
+   page open, every 4 minutes while the page is visible, and when the dispense form opens means
+   it is already awake by then. */
+(function(){
+  var last = 0;
+  function ping(){
+    if (typeof APPS_SCRIPT_URL === "undefined" || !APPS_SCRIPT_URL || document.hidden) return;
+    if (Date.now() - last < 60000) return;
+    last = Date.now();
+    fetch(APPS_SCRIPT_URL + "?action=ping").catch(function(){});
+  }
+  window.pingServer_ = ping;
+  ping();
+  setInterval(ping, 240000);
+  document.addEventListener("visibilitychange", ping);
+})();
 </script>
 </body>
 </html>

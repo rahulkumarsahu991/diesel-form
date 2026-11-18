@@ -1444,6 +1444,23 @@ document.addEventListener("input", function(e){
   if (i !== -1) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, "");
   if (v !== t.value) t.value = v;
 });
+/* Wakes the Apps Script server before it is needed. After a quiet spell Google puts it to sleep
+   and the next real call (a Dispense, a Submit) waits 10+ s for it to start; a tiny "ping" on
+   page open, every 4 minutes while the page is visible, and when the dispense form opens means
+   it is already awake by then. */
+(function(){
+  var last = 0;
+  function ping(){
+    if (typeof APPS_SCRIPT_URL === "undefined" || !APPS_SCRIPT_URL || document.hidden) return;
+    if (Date.now() - last < 60000) return;
+    last = Date.now();
+    fetch(APPS_SCRIPT_URL + "?action=ping").catch(function(){});
+  }
+  window.pingServer_ = ping;
+  ping();
+  setInterval(ping, 240000);
+  document.addEventListener("visibilitychange", ping);
+})();
 /* Cache the page + logo so the form opens fast on a weak network */
 if ("serviceWorker" in navigator) window.addEventListener("load", function(){ navigator.serviceWorker.register("/sw-forms.js", { scope: location.pathname }).catch(function(){}); });
 </script>
