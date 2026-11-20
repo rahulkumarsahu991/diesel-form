@@ -2141,10 +2141,31 @@ function deleteRequestRow_(body) {
   try {
     var found = findRow_(body.id);
     if (!found) return { ok: false, error: 'Request ID not found' };
-    found.sheet.deleteRow(found.rowIndex);
-    rowIdxClear_(found.sheet);
-    Logger.log('Request ' + body.id + ' deleted via web app.');
-    return { ok: true };
+    var sheet = found.sheet, row = found.rowIndex, id = String(body.id);
+    // A delete is only reported as done when the row is really gone: after each attempt the same
+    // position is read back. The normal delete is tried first, then the other delete call, and as a
+    // last resort the row is emptied (the app ignores rows without an ID), so a delete can never
+    // say "ok" while the request is still there.
+    function stillThere() {
+      SpreadsheetApp.flush();
+      return String(sheet.getRange(row, COL.ID).getValue()) === id;
+    }
+    var how = 'deleteRow', lastErr = '';
+    try { sheet.deleteRow(row); } catch (e) { lastErr = e.message; }
+    if (stillThere()) {
+      how = 'deleteRows';
+      try { sheet.deleteRows(row, 1); } catch (e2) { lastErr = e2.message; }
+    }
+    if (stillThere()) {
+      how = 'cleared';
+      try { sheet.getRange(row, 1, 1, sheet.getMaxColumns()).clearContent(); } catch (e3) { lastErr = e3.message; }
+    }
+    rowIdxClear_(sheet);
+    if (stillThere()) {
+      return { ok: false, error: 'The row could not be removed from the sheet' + (lastErr ? ' (' + lastErr + ')' : '') + '. Check that the "' + sheet.getName() + '" tab is not protected.' };
+    }
+    Logger.log('Request ' + body.id + ' deleted via web app (' + how + ').');
+    return { ok: true, how: how };
   } finally {
     lock.releaseLock();
   }
